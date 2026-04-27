@@ -38,16 +38,11 @@ class RightPanel(QWidget):
         sep.setStyleSheet('background: #E0E0E0;')
         layout.addWidget(sep)
 
-        # 범례
-        legend = QLabel(
-            '■ <span style="color:#1B5E20">1~10위</span>  '
-            '■ <span style="color:#0D47A1">11~30위</span>  '
-            '■ <span style="color:#616161">31위 이상</span>  '
-            '■ <span style="color:#B71C1C">범위 밖 (-)</span>'
-        )
-        legend.setTextFormat(Qt.RichText)
-        legend.setStyleSheet('font-size: 9pt;')
-        layout.addWidget(legend)
+        # 범례 (분석 시작 시 동적 갱신)
+        self.legend = QLabel('분석을 시작하면 범례가 표시됩니다.')
+        self.legend.setTextFormat(Qt.RichText)
+        self.legend.setStyleSheet('font-size: 9pt; color: #9E9E9E;')
+        layout.addWidget(self.legend)
 
         # 테이블
         self.table = QTableWidget(0, 4)
@@ -116,18 +111,23 @@ class RightPanel(QWidget):
         self.table.setItem(row, 2, make_item(keyword))
 
         rank_item = make_item(rank_text, Qt.AlignCenter)
-        if rank > 0 and rank <= 10:
+        if rank > 0:
             rank_item.setForeground(QColor('#1B5E20'))
             rank_item.setFont(QFont('', -1, QFont.Bold))
-        elif rank > 0 and rank <= 30:
-            rank_item.setForeground(QColor('#0D47A1'))
-            rank_item.setFont(QFont('', -1, QFont.Bold))
-        elif rank == 0:
+        else:
             rank_item.setForeground(QColor('#B71C1C'))
 
         self.table.setItem(row, 3, rank_item)
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
+
+    def update_legend(self, rank_limit: int):
+        self.legend.setStyleSheet('font-size: 9pt;')
+        self.legend.setText(
+            f'■ <span style="color:#1B5E20;font-weight:bold;">1~{rank_limit}위</span>'
+            f'&nbsp;&nbsp;&nbsp;'
+            f'■ <span style="color:#B71C1C;font-weight:bold;">순위 밖 (-)</span>'
+        )
 
     def clear_results(self):
         self.table.setRowCount(0)

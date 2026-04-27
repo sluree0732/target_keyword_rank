@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
             self._analyzer.wait()
 
         self.right_panel.clear_results()
+        self.right_panel.update_legend(rank_limit)
         self.left_panel.set_analyzing(True)
         self.left_panel.update_status('분석 준비 중...')
 
