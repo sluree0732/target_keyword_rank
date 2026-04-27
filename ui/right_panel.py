@@ -1,0 +1,145 @@
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QFileDialog,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from utils.excel_exporter import export_to_excel
+
+
+class RightPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        self._results = []
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 20, 20, 20)
+
+        title = QLabel('분석 결과')
+        title.setFont(QFont('', 13, QFont.Bold))
+        layout.addWidget(title)
+
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet('background: #E0E0E0;')
+        layout.addWidget(sep)
+
+        # 범례
+        legend = QLabel(
+            '■ <span style="color:#1B5E20">1~10위</span>  '
+            '■ <span style="color:#0D47A1">11~30위</span>  '
+            '■ <span style="color:#616161">31~100위</span>  '
+            '■ <span style="color:#B71C1C">100위 밖</span>'
+        )
+        legend.setTextFormat(Qt.RichText)
+        legend.setStyleSheet('font-size: 9pt;')
+        layout.addWidget(legend)
+
+        # 테이블
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(['블로그 주소', '게시글 제목', '키워드', '순위'])
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setShowGrid(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setStyleSheet(
+            'QTableWidget { border: 1px solid #E0E0E0; gridline-color: #F5F5F5; }'
+            'QTableWidget::item { padding: 6px; }'
+            'QHeaderView::section {'
+            '  background-color: #1565C0; color: white;'
+            '  font-weight: bold; padding: 8px; border: none;'
+            '}'
+            'QTableWidget::item:alternate { background-color: #F8F9FA; }'
+        )
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
+        layout.addWidget(self.table)
+
+        # 다운로드 버튼
+        self.download_btn = QPushButton('엑셀 다운로드')
+        self.download_btn.setMinimumHeight(40)
+        self.download_btn.setFont(QFont('', 10, QFont.Bold))
+        self.download_btn.setEnabled(False)
+        self.download_btn.setStyleSheet(
+            'QPushButton {'
+            '  background-color: #2E7D32;'
+            '  color: white;'
+            '  border-radius: 6px;'
+            '  border: none;'
+            '}'
+            'QPushButton:hover { background-color: #388E3C; }'
+            'QPushButton:pressed { background-color: #1B5E20; }'
+            'QPushButton:disabled { background-color: #90A4AE; }'
+        )
+        self.download_btn.clicked.connect(self._on_download)
+        layout.addWidget(self.download_btn)
+
+    def add_result(self, blog_url: str, post_title: str, keyword: str, rank: int):
+        self._results.append({
+            'blog_url': blog_url,
+            'post_title': post_title,
+            'keyword': keyword,
+            'rank': rank,
+        })
+
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        rank_text = f'{rank}위' if rank > 0 else '100위 밖'
+
+        def make_item(text, align=Qt.AlignVCenter | Qt.AlignLeft):
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(align)
+            return item
+
+        self.table.setItem(row, 0, make_item(blog_url))
+        self.table.setItem(row, 1, make_item(post_title))
+        self.table.setItem(row, 2, make_item(keyword))
+
+        rank_item = make_item(rank_text, Qt.AlignCenter)
+        if rank > 0 and rank <= 10:
+            rank_item.setForeground(QColor('#1B5E20'))
+            rank_item.setFont(QFont('', -1, QFont.Bold))
+        elif rank > 0 and rank <= 30:
+            rank_item.setForeground(QColor('#0D47A1'))
+            rank_item.setFont(QFont('', -1, QFont.Bold))
+        elif rank < 0:
+            rank_item.setForeground(QColor('#B71C1C'))
+            rank_item.setText('100위 밖')
+        self.table.setItem(row, 3, rank_item)
+
+        self.table.scrollToBottom()
+        self.download_btn.setEnabled(True)
+
+    def clear_results(self):
+        self.table.setRowCount(0)
+        self._results.clear()
+        self.download_btn.setEnabled(False)
+
+    def _on_download(self):
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, '엑셀 저장', '키워드분석결과.xlsx', 'Excel Files (*.xlsx)'
+        )
+        if not filepath:
+            return
+        try:
+            export_to_excel(self._results, filepath)
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, '저장 실패', str(e))

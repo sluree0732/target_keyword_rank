@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.spec
+!타겟키워드분석.spec
+
+# PyInstaller 빌드 결과
+dist/
+build/
+
+# 환경
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
