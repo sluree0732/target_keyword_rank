@@ -2,7 +2,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from core.blog_scraper import get_recent_posts
 from core.keyword_extractor import extract_keywords
-from core.rank_checker import check_rank
+from core.rank_checker import create_session, check_rank
 from utils.url_parser import extract_blog_id
 
 
@@ -12,17 +12,28 @@ class AnalyzerThread(QThread):
     error_occurred = pyqtSignal(str)
     finished_all = pyqtSignal()
 
-    def __init__(self, urls: list, post_count: int, keyword_count: int):
+    def __init__(
+        self,
+        urls: list,
+        post_count: int,
+        keyword_count: int,
+        rank_limit: int = 10,
+    ):
         super().__init__()
         self.urls = urls
         self.post_count = post_count
         self.keyword_count = keyword_count
+        self.rank_limit = rank_limit
         self._cancelled = False
 
     def cancel(self):
         self._cancelled = True
 
     def run(self):
+        # 세션 1회 생성 후 전체 분석에서 재사용
+        self.status_updated.emit('네이버 연결 중...')
+        session = create_session()
+
         for url in self.urls:
             if self._cancelled:
                 break
@@ -63,12 +74,14 @@ class AnalyzerThread(QThread):
                     if self._cancelled:
                         break
 
-                    self.status_updated.emit(f'순위 확인 중... [{keyword}]')
+                    self.status_updated.emit(
+                        f'순위 확인 중... [{keyword}] (상위 {self.rank_limit}위)'
+                    )
 
                     try:
-                        rank = check_rank(keyword, post_url)
+                        rank = check_rank(keyword, post_url, session, self.rank_limit)
                     except Exception:
-                        rank = -1
+                        rank = 0
 
                     self.result_ready.emit(blog_url, title, keyword, rank)
 

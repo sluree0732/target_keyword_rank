@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
 
         self.left_panel.analyze_requested.connect(self._start_analysis)
 
-    def _start_analysis(self, urls: list, post_count: int, keyword_count: int):
+    def _start_analysis(self, urls: list, post_count: int, keyword_count: int, rank_limit: int):
         if self._analyzer and self._analyzer.isRunning():
             self._analyzer.cancel()
             self._analyzer.wait()
@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
         self.left_panel.set_analyzing(True)
         self.left_panel.update_status('분석 준비 중...')
 
-        self._analyzer = AnalyzerThread(urls, post_count, keyword_count)
+        self._analyzer = AnalyzerThread(urls, post_count, keyword_count, rank_limit)
         self._analyzer.result_ready.connect(self.right_panel.add_result)
         self._analyzer.status_updated.connect(self.left_panel.update_status)
         self._analyzer.error_occurred.connect(self._on_error)

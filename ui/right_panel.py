@@ -1,9 +1,12 @@
+import os
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
     QFileDialog,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -38,8 +41,8 @@ class RightPanel(QWidget):
         legend = QLabel(
             '■ <span style="color:#1B5E20">1~10위</span>  '
             '■ <span style="color:#0D47A1">11~30위</span>  '
-            '■ <span style="color:#616161">31~100위</span>  '
-            '■ <span style="color:#B71C1C">100위 밖</span>'
+            '■ <span style="color:#616161">31위 이상</span>  '
+            '■ <span style="color:#B71C1C">범위 밖 (-)</span>'
         )
         legend.setTextFormat(Qt.RichText)
         legend.setStyleSheet('font-size: 9pt;')
@@ -54,7 +57,7 @@ class RightPanel(QWidget):
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.setStyleSheet(
-            'QTableWidget { border: 1px solid #E0E0E0; gridline-color: #F5F5F5; }'
+            'QTableWidget { border: 1px solid #E0E0E0; }'
             'QTableWidget::item { padding: 6px; }'
             'QHeaderView::section {'
             '  background-color: #1565C0; color: white;'
@@ -78,10 +81,8 @@ class RightPanel(QWidget):
         self.download_btn.setEnabled(False)
         self.download_btn.setStyleSheet(
             'QPushButton {'
-            '  background-color: #2E7D32;'
-            '  color: white;'
-            '  border-radius: 6px;'
-            '  border: none;'
+            '  background-color: #2E7D32; color: white;'
+            '  border-radius: 6px; border: none;'
             '}'
             'QPushButton:hover { background-color: #388E3C; }'
             'QPushButton:pressed { background-color: #1B5E20; }'
@@ -101,7 +102,8 @@ class RightPanel(QWidget):
         row = self.table.rowCount()
         self.table.insertRow(row)
 
-        rank_text = f'{rank}위' if rank > 0 else '100위 밖'
+        # rank == 0 → 범위 밖 → "-"
+        rank_text = f'{rank}위' if rank > 0 else '-'
 
         def make_item(text, align=Qt.AlignVCenter | Qt.AlignLeft):
             item = QTableWidgetItem(text)
@@ -119,11 +121,10 @@ class RightPanel(QWidget):
         elif rank > 0 and rank <= 30:
             rank_item.setForeground(QColor('#0D47A1'))
             rank_item.setFont(QFont('', -1, QFont.Bold))
-        elif rank < 0:
+        elif rank == 0:
             rank_item.setForeground(QColor('#B71C1C'))
-            rank_item.setText('100위 밖')
-        self.table.setItem(row, 3, rank_item)
 
+        self.table.setItem(row, 3, rank_item)
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
@@ -138,8 +139,17 @@ class RightPanel(QWidget):
         )
         if not filepath:
             return
+
         try:
             export_to_excel(self._results, filepath)
+            # 저장 완료 팝업
+            count = len(self._results)
+            filename = os.path.basename(filepath)
+            msg = QMessageBox(self)
+            msg.setWindowTitle('저장 완료')
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(f'<b>{filename}</b><br>총 {count}건 저장되었습니다.')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
         except Exception as e:
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(self, '저장 실패', str(e))

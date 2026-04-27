@@ -1,6 +1,5 @@
 import re
 
-# kiwipiepy 없어도 동작하도록 fallback 처리
 try:
     from kiwipiepy import Kiwi
     _kiwi = Kiwi()
@@ -9,10 +8,15 @@ except Exception:
     _kiwi = None
     _USE_KIWI = False
 
+# 단독으로 쓰이면 의미 없는 단어
 NOISE_WORDS = {
     '후기', '리뷰', '방문', '소개', '이야기', '이번', '이날', '이곳',
     '처음', '마지막', '최근', '이후', '방법', '내용', '이름', '하기',
     '오늘', '어제', '드디어', '정말', '진짜', '완전', '너무', '조금',
+    '아이',   # "아이랑" → "아이" 오추출 방지
+    '혼자',   # 단독 키워드로 의미 없음
+    '추천',   # 다른 단어 없이 단독 사용 불가
+    '비교', '정리', '모음', '위치', '시간', '가격',
 }
 
 LOCATION_KEYWORDS = {
@@ -24,7 +28,7 @@ LOCATION_KEYWORDS = {
     '해운대구', '사하구', '금정구', '강서구', '연제구', '수영구', '사상구', '기장',
     # 부산 주요 지역/역
     '해운대', '광안리', '남포동', '서면', '장산', '센텀', '동래', '수영',
-    '망미', '민락', '정관', '일광', '기장읍', '온천장', '부평',
+    '망미', '민락', '정관', '일광', '기장읍', '온천장', '부평', '전포',
     # 서울 주요 지역
     '강남', '강북', '홍대', '신촌', '명동', '이태원', '압구정', '청담',
     '여의도', '종로', '신림', '건대', '성수', '왕십리', '마포', '용산',
@@ -33,11 +37,15 @@ LOCATION_KEYWORDS = {
     '청주', '전주', '포항', '제주시', '서귀포',
 }
 
+# 업종 카테고리
 CATEGORY_KEYWORDS = {
     '맛집', '식당', '카페', '횟집', '고기집', '음식점', '레스토랑',
     '이자카야', '술집', '포차', '분식', '베이커리', '디저트',
     '숙소', '펜션', '호텔', '모텔', '게스트하우스',
     '쇼핑', '마트', '시장', '관광지', '명소',
+    # 여행 의도 키워드 — "부산 가볼만한곳" 같은 형태에 쓰임
+    '가볼만한곳', '여행', '데이트', '코스', '드라이브', '나들이',
+    '산책', '피크닉', '스냅', '뷰맛집', '야경',
 }
 
 
@@ -48,55 +56,71 @@ def extract_keywords(title: str, count: int = 3) -> list:
 
     location_nouns = [n for n in nouns if n in LOCATION_KEYWORDS]
     category_nouns = [n for n in nouns if n in CATEGORY_KEYWORDS]
-    other_nouns = [n for n in nouns if n not in LOCATION_KEYWORDS and n not in CATEGORY_KEYWORDS]
+    # 지역도 카테고리도 아닌 고유명사 (브랜드명 등)
+    other_nouns = [
+        n for n in nouns
+        if n not in LOCATION_KEYWORDS and n not in CATEGORY_KEYWORDS
+    ]
 
     scored = {}
 
-    def add(kw, score):
+    def add(kw: str, score: int):
+        kw = kw.strip()
         if kw and len(kw) > 1:
             scored[kw] = max(scored.get(kw, 0), score)
 
-    # 지역 + 카테고리 (최우선: 실제 검색 패턴)
+    # ── 지역 + 카테고리 (최우선: 실제 검색 패턴) ──────────────────
     for loc in location_nouns:
         for cat in category_nouns:
             add(f'{loc} {cat}', 20)
 
-    # 지역 + 음식/업종명 (other)
+    # ── 지역 + 브랜드/고유명사 ────────────────────────────────────
     for loc in location_nouns:
         for other in other_nouns:
-            add(f'{loc} {other}', 15)
+            add(f'{loc} {other}', 16)
 
-    # 지역 + 다른지역 + 카테고리 (삼중 조합)
+    # ── 지역(소) + 지역(대) + 카테고리: 예) 해운대구 부산 맛집 ────
+    # 단, 지역+지역만의 조합(카테고리 없음)은 생성하지 않음
+    for i, loc1 in enumerate(location_nouns):
+        for j, loc2 in enumerate(location_nouns):
+            if i == j:
+                continue
+            for cat in category_nouns:
+                add(f'{loc1} {loc2} {cat}', 17)
+
+    # ── 지역 + 브랜드 + 카테고리 삼중 조합 ──────────────────────
     for loc in location_nouns:
         for other in other_nouns:
             for cat in category_nouns:
                 add(f'{loc} {other} {cat}', 18)
-        for i in range(len(location_nouns)):
-            for cat in category_nouns:
-                if location_nouns[i] != loc:
-                    add(f'{loc} {location_nouns[i]} {cat}', 17)
 
-    # 지역 + 두 other
-    for loc in location_nouns:
-        for i in range(len(other_nouns) - 1):
-            add(f'{loc} {other_nouns[i]} {other_nouns[i+1]}', 12)
-
-    # 연속 bigram (지역 없어도)
+    # ── 연속 bigram (지역+지역 단독 조합은 제외) ──────────────────
     for i in range(len(nouns) - 1):
-        kw = f'{nouns[i]} {nouns[i+1]}'
+        n1, n2 = nouns[i], nouns[i + 1]
+        # 지역+지역 단독 조합 제외 (검색량 낮음)
+        if n1 in LOCATION_KEYWORDS and n2 in LOCATION_KEYWORDS:
+            continue
+        kw = f'{n1} {n2}'
         score = 8
-        if nouns[i] in LOCATION_KEYWORDS or nouns[i+1] in LOCATION_KEYWORDS:
+        if n1 in LOCATION_KEYWORDS or n2 in LOCATION_KEYWORDS:
             score += 4
-        if nouns[i] in CATEGORY_KEYWORDS or nouns[i+1] in CATEGORY_KEYWORDS:
-            score += 2
+        if n1 in CATEGORY_KEYWORDS or n2 in CATEGORY_KEYWORDS:
+            score += 3
         add(kw, score)
 
-    # 연속 trigram
+    # ── 연속 trigram ──────────────────────────────────────────────
     for i in range(len(nouns) - 2):
-        kw = f'{nouns[i]} {nouns[i+1]} {nouns[i+2]}'
+        n1, n2, n3 = nouns[i], nouns[i + 1], nouns[i + 2]
+        trio = [n1, n2, n3]
+        # 3개 모두 지역이면 제외
+        if all(n in LOCATION_KEYWORDS for n in trio):
+            continue
+        kw = f'{n1} {n2} {n3}'
         score = 6
-        if any(n in LOCATION_KEYWORDS for n in [nouns[i], nouns[i+1], nouns[i+2]]):
+        if any(n in LOCATION_KEYWORDS for n in trio):
             score += 4
+        if any(n in CATEGORY_KEYWORDS for n in trio):
+            score += 3
         add(kw, score)
 
     ranked = sorted(scored.items(), key=lambda x: x[1], reverse=True)
@@ -114,18 +138,15 @@ def _kiwi_nouns(title: str) -> list:
     seen = set()
     result = []
 
-    # kiwipiepy 추출 명사
     for token in tokens:
         if token.tag in ('NNG', 'NNP') and len(token.form) >= 2:
             if token.form not in NOISE_WORDS and token.form not in seen:
                 seen.add(token.form)
                 result.append(token.form)
 
-    # 원본 어절(띄어쓰기 단위) 중 kiwipiepy가 분리한 복합 단어 복원
-    # 예: "연막창" → "연" + "막창" 으로 분리됐을 때 원본 "연막창" 추가
+    # 복합 고유명사 복원: "연막창" → "연"+"막창" 으로 분리된 경우 원본 추가
     for word in re.findall(r'[가-힣]{3,}', title):
         if word not in seen and word not in NOISE_WORDS:
-            # 이 단어가 추출된 명사들의 조합으로 이루어진 경우 원본 단어를 우선 추가
             covered = any(word.startswith(n) or word.endswith(n) for n in result if n in word)
             if covered or not any(word in n for n in result):
                 seen.add(word)
