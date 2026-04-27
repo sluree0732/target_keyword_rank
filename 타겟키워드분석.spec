@@ -32,11 +32,19 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+splash = Splash(
+    'splash.png',
+    binaries=a.binaries,
+    datas=a.datas,
+)
+
 exe = EXE(
     pyz,
     a.scripts,
-    [],
-    exclude_binaries=True,
+    a.binaries,
+    a.datas,
+    splash,
+    splash.binaries,
     name='타겟키워드분석',
     debug=False,
     bootloader_ignore_signals=False,
@@ -44,14 +52,5 @@ exe = EXE(
     upx=True,
     console=False,
     disable_windowed_traceback=False,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='타겟키워드분석',
+    onefile=True,
 )

@@ -4,6 +4,12 @@ from PyQt5.QtWidgets import QApplication
 
 from ui.main_window import MainWindow
 
+try:
+    import pyi_splash
+    pyi_splash.close()
+except Exception:
+    pass
+
 
 def main():
     app = QApplication(sys.argv)
