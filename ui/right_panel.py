@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
@@ -134,11 +135,23 @@ class RightPanel(QWidget):
         self.download_btn.setEnabled(False)
 
     def _on_download(self):
+        timestamp = datetime.now().strftime('%y%m%d%H%M')
+        default_name = f'키워드분석결과_{timestamp}.xlsx'
         filepath, _ = QFileDialog.getSaveFileName(
-            self, '엑셀 저장', '키워드분석결과.xlsx', 'Excel Files (*.xlsx)'
+            self, '엑셀 저장', default_name, 'Excel Files (*.xlsx)'
         )
         if not filepath:
             return
+
+        if os.path.exists(filepath):
+            reply = QMessageBox.question(
+                self, '파일 덮어쓰기',
+                f'<b>{os.path.basename(filepath)}</b> 파일이 이미 존재합니다.<br>덮어쓰겠습니까?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
 
         try:
             export_to_excel(self._results, filepath)
