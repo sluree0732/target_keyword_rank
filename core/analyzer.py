@@ -13,9 +13,9 @@ _RETRY_DELAYS = [15, 30, 60]
 
 
 def _load_api_key() -> str:
-    # PyInstaller onefile: sys.executable = EXE 경로, 일반 실행: __file__ 기준
     if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
+        # EXE 내부 번들 파일은 _MEIPASS 임시 폴더에 압축 해제됨
+        base_dir = sys._MEIPASS
     else:
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     config_path = os.path.join(base_dir, 'config.json')

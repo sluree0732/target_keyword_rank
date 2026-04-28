@@ -15,6 +15,7 @@ a = Analysis(
         ('core', 'core'),
         ('utils', 'utils'),
         ('splash.png', '.'),
+        ('config.json', '.'),
     ] + curl_datas + genai_datas,
     hiddenimports=[
         'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets',
