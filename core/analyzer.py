@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import time
 
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -12,7 +13,12 @@ _RETRY_DELAYS = [15, 30, 60]
 
 
 def _load_api_key() -> str:
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.json')
+    # PyInstaller onefile: sys.executable = EXE 경로, 일반 실행: __file__ 기준
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(base_dir, 'config.json')
     with open(config_path, encoding='utf-8') as f:
         return json.load(f)['gemini_api_key']
 
