@@ -187,10 +187,10 @@ class LeftPanel(QWidget):
 
     def _make_rank_limit_row(self) -> QVBoxLayout:
         outer = QVBoxLayout()
-        outer.setSpacing(2)
+        outer.setSpacing(6)
 
-        row = QHBoxLayout()
-        lbl = QLabel('순위 탐색 범위')
+        outer.addWidget(QLabel('순위 탐색 범위'))
+
         self.rank_limit_input = QLineEdit('5')
         self.rank_limit_input.setFixedWidth(76)
         self.rank_limit_input.setAlignment(Qt.AlignCenter)
@@ -199,17 +199,13 @@ class LeftPanel(QWidget):
             'QLineEdit:focus { border-color: #1976D2; }'
         )
 
-        row.addWidget(lbl)
-        row.addStretch()
-        row.addWidget(QLabel('상위'))
-        row.addWidget(self.rank_limit_input)
-        row.addWidget(QLabel('위'))
-        outer.addLayout(row)
-
-        hint_lbl = QLabel('설정값 이내 없으면 "-" 표시')
-        hint_lbl.setStyleSheet('color: #9E9E9E; font-size: 8pt;')
-        hint_lbl.setAlignment(Qt.AlignRight)
-        outer.addWidget(hint_lbl)
+        input_row = QHBoxLayout()
+        input_row.setSpacing(4)
+        input_row.addWidget(QLabel('상위'))
+        input_row.addWidget(self.rank_limit_input)
+        input_row.addWidget(QLabel('위'))
+        input_row.addStretch()
+        outer.addLayout(input_row)
 
         return outer
 
