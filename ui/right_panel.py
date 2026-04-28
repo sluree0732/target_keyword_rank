@@ -22,7 +22,8 @@ class RightPanel(QWidget):
     def __init__(self):
         super().__init__()
         self._results = []
-        self._last_post_key = None
+        self._group_start_row = -1
+        self._group_key = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -119,17 +120,14 @@ class RightPanel(QWidget):
             return item
 
         post_key = (blog_url, post_title)
-        is_same_post = (post_key == self._last_post_key)
-        self._last_post_key = post_key
+        if post_key != self._group_key:
+            self._flush_span()
+            self._group_key = post_key
+            self._group_start_row = row
 
-        if is_same_post:
-            self.table.setItem(row, 0, make_item(''))
-            self.table.setItem(row, 1, make_item('', Qt.AlignCenter))
-            self.table.setItem(row, 2, make_item(''))
-        else:
-            self.table.setItem(row, 0, make_item(blog_url))
-            self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
-            self.table.setItem(row, 2, make_item(post_title))
+        self.table.setItem(row, 0, make_item(blog_url))
+        self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
+        self.table.setItem(row, 2, make_item(post_title))
 
         self.table.setItem(row, 3, make_item(keyword))
 
@@ -144,6 +142,21 @@ class RightPanel(QWidget):
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
+    def _flush_span(self):
+        if self._group_start_row < 0:
+            return
+        span = self.table.rowCount() - self._group_start_row
+        if span <= 1:
+            return
+        for col in (0, 1, 2):
+            self.table.setSpan(self._group_start_row, col, span, 1)
+            item = self.table.item(self._group_start_row, col)
+            if item:
+                item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
+
+    def flush_last_group(self):
+        self._flush_span()
+
     def update_legend(self, rank_limit: int):
         self.legend.setStyleSheet('font-size: 9pt;')
         self.legend.setText(
@@ -155,7 +168,8 @@ class RightPanel(QWidget):
     def clear_results(self):
         self.table.setRowCount(0)
         self._results.clear()
-        self._last_post_key = None
+        self._group_start_row = -1
+        self._group_key = None
         self.download_btn.setEnabled(False)
 
     def _on_download(self):

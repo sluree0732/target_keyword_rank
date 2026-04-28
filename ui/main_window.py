@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
         self._analyzer.result_ready.connect(self.right_panel.add_result)
         self._analyzer.status_updated.connect(self.left_panel.update_status)
         self._analyzer.error_occurred.connect(self._on_error)
+        self._analyzer.finished_all.connect(self.right_panel.flush_last_group)
         self._analyzer.finished_all.connect(self._on_finished)
         self._analyzer.start()
 
