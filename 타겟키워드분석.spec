@@ -1,47 +1,57 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os, sys
-from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_all
 
-kiwi_datas, kiwi_binaries, kiwi_hiddenimports = collect_all('kiwipiepy')
+# curl_cffi 및 google-generativeai 데이터 수집
 curl_datas, curl_binaries, curl_hiddenimports = collect_all('curl_cffi')
-kiwi_model_datas, _, _ = collect_all('kiwipiepy_model')
+genai_datas, genai_binaries, genai_hiddenimports = collect_all('google.generativeai')
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=kiwi_binaries + curl_binaries,
+    binaries=curl_binaries + genai_binaries,
     datas=[
         ('ui', 'ui'),
         ('core', 'core'),
         ('utils', 'utils'),
-    ] + kiwi_datas + curl_datas + kiwi_model_datas,
+        ('splash.png', '.'),
+    ] + curl_datas + genai_datas,
     hiddenimports=[
-        'PyQt5', 'PyQt5.QtWidgets', 'PyQt5.QtCore', 'PyQt5.QtGui',
-        'openpyxl', 'openpyxl.styles', 'openpyxl.utils',
-        'bs4', 'lxml', 'lxml.etree', 'lxml._elementpath',
-        'requests', 'urllib3',
-        'kiwipiepy', 'kiwipiepy.utils',
-        'curl_cffi', 'curl_cffi.requests',
-    ] + kiwi_hiddenimports + curl_hiddenimports,
+        'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets',
+        'openpyxl', 'bs4', 'lxml', 'curl_cffi',
+        'google.generativeai',
+        'google.ai.generativelanguage',
+        'google.api_core',
+        'google.auth',
+        'grpc',
+    ] + curl_hiddenimports + genai_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas', 'PIL'],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=None,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
 splash = Splash(
     'splash.png',
     binaries=a.binaries,
     datas=a.datas,
+    text_pos=None,
+    text_size=12,
+    minify_script=True,
+    always_on_top=True,
 )
 
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
+    a.zipfiles,
     a.datas,
     splash,
     splash.binaries,
@@ -52,5 +62,9 @@ exe = EXE(
     upx=True,
     console=False,
     disable_windowed_traceback=False,
-    onefile=True,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None, # 여기에 .ico 파일 경로를 넣으면 아이콘이 바뀝니다
 )
