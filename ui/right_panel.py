@@ -108,8 +108,15 @@ class RightPanel(QWidget):
             'rank': rank,
         })
 
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+        row = self.table.rowCount()  # insertRow 전에 확보
+
+        post_key = (blog_url, post_title)
+        if post_key != self._group_key:
+            self._flush_span(row)    # 새 행 삽입 전에 이전 그룹 span 확정
+            self._group_key = post_key
+            self._group_start_row = row
+
+        self.table.insertRow(row)    # flush 이후에 삽입
 
         rank_text = f'{rank}위' if rank > 0 else '-'
         visitor_text = str(visitor_count) if visitor_count > 0 else '-'
@@ -118,12 +125,6 @@ class RightPanel(QWidget):
             item = QTableWidgetItem(text)
             item.setTextAlignment(align)
             return item
-
-        post_key = (blog_url, post_title)
-        if post_key != self._group_key:
-            self._flush_span()
-            self._group_key = post_key
-            self._group_start_row = row
 
         self.table.setItem(row, 0, make_item(blog_url))
         self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
@@ -142,10 +143,10 @@ class RightPanel(QWidget):
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
-    def _flush_span(self):
+    def _flush_span(self, end_row: int):
         if self._group_start_row < 0:
             return
-        span = self.table.rowCount() - self._group_start_row
+        span = end_row - self._group_start_row
         if span <= 1:
             return
         for col in (0, 1, 2):
@@ -155,7 +156,7 @@ class RightPanel(QWidget):
                 item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
 
     def flush_last_group(self):
-        self._flush_span()
+        self._flush_span(self.table.rowCount())
 
     def update_legend(self, rank_limit: int):
         self.legend.setStyleSheet('font-size: 9pt;')
