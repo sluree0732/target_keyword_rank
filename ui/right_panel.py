@@ -54,7 +54,7 @@ class RightPanel(QWidget):
             ['블로그 주소', '오늘 방문자수', '게시글 제목', '키워드', '순위']
         )
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.NoSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
