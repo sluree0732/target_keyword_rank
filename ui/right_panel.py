@@ -22,8 +22,10 @@ class RightPanel(QWidget):
     def __init__(self):
         super().__init__()
         self._results = []
-        self._group_start_row = -1
-        self._group_key = None
+        self._blog_group_start_row = -1
+        self._blog_group_key = None
+        self._post_group_start_row = -1
+        self._post_group_key = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -49,7 +51,7 @@ class RightPanel(QWidget):
         # 테이블 — 5컬럼
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ['블로그 주소', '오늘 방문자', '게시글 제목', '키워드', '순위']
+            ['블로그 주소', '오늘 방문자수', '게시글 제목', '키워드', '순위']
         )
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -110,13 +112,24 @@ class RightPanel(QWidget):
 
         row = self.table.rowCount()  # insertRow 전에 확보
 
+        blog_key = blog_url
         post_key = (blog_url, post_title)
-        if post_key != self._group_key:
-            self._flush_span(row)    # 새 행 삽입 전에 이전 그룹 span 확정
-            self._group_key = post_key
-            self._group_start_row = row
 
-        self.table.insertRow(row)    # flush 이후에 삽입
+        if blog_key != self._blog_group_key:
+            # 새 블로그 — 이전 post/blog 그룹 모두 flush 후 두 그룹 모두 시작
+            self._flush_post_span(row)
+            self._flush_blog_span(row)
+            self._blog_group_key = blog_key
+            self._blog_group_start_row = row
+            self._post_group_key = post_key
+            self._post_group_start_row = row
+        elif post_key != self._post_group_key:
+            # 같은 블로그, 새 게시글 — post 그룹만 flush 후 재시작
+            self._flush_post_span(row)
+            self._post_group_key = post_key
+            self._post_group_start_row = row
+
+        self.table.insertRow(row)  # flush 완료 후 삽입
 
         rank_text = f'{rank}위' if rank > 0 else '-'
         visitor_text = str(visitor_count) if visitor_count > 0 else '-'
@@ -129,7 +142,6 @@ class RightPanel(QWidget):
         self.table.setItem(row, 0, make_item(blog_url))
         self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
         self.table.setItem(row, 2, make_item(post_title))
-
         self.table.setItem(row, 3, make_item(keyword))
 
         rank_item = make_item(rank_text, Qt.AlignCenter)
@@ -143,20 +155,35 @@ class RightPanel(QWidget):
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
-    def _flush_span(self, end_row: int):
-        if self._group_start_row < 0:
+    def _flush_blog_span(self, end_row: int):
+        """블로그 단위 span: col 0(블로그 주소), col 1(방문자수)"""
+        if self._blog_group_start_row < 0:
             return
-        span = end_row - self._group_start_row
+        span = end_row - self._blog_group_start_row
         if span <= 1:
             return
-        for col in (0, 1, 2):
-            self.table.setSpan(self._group_start_row, col, span, 1)
-            item = self.table.item(self._group_start_row, col)
+        for col in (0, 1):
+            self.table.setSpan(self._blog_group_start_row, col, span, 1)
+            item = self.table.item(self._blog_group_start_row, col)
             if item:
                 item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
 
+    def _flush_post_span(self, end_row: int):
+        """게시글 단위 span: col 2(게시글 제목)"""
+        if self._post_group_start_row < 0:
+            return
+        span = end_row - self._post_group_start_row
+        if span <= 1:
+            return
+        self.table.setSpan(self._post_group_start_row, 2, span, 1)
+        item = self.table.item(self._post_group_start_row, 2)
+        if item:
+            item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
+
     def flush_last_group(self):
-        self._flush_span(self.table.rowCount())
+        end_row = self.table.rowCount()
+        self._flush_post_span(end_row)
+        self._flush_blog_span(end_row)
 
     def update_legend(self, rank_limit: int):
         self.legend.setStyleSheet('font-size: 9pt;')
@@ -169,8 +196,10 @@ class RightPanel(QWidget):
     def clear_results(self):
         self.table.setRowCount(0)
         self._results.clear()
-        self._group_start_row = -1
-        self._group_key = None
+        self._blog_group_start_row = -1
+        self._blog_group_key = None
+        self._post_group_start_row = -1
+        self._post_group_key = None
         self.download_btn.setEnabled(False)
 
     def _on_download(self):
