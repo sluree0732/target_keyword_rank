@@ -159,14 +159,14 @@ class RightPanel(QWidget):
         self.download_btn.setEnabled(True)
 
     def _insert_separator(self):
-        sep_row = self.table.rowCount()
-        self.table.insertRow(sep_row)
-        self.table.setRowHeight(sep_row, 4)
-        self.table.setSpan(sep_row, 0, 1, 5)
-        item = QTableWidgetItem()
-        item.setBackground(QColor('#1565C0'))
-        item.setFlags(Qt.NoItemFlags)
-        self.table.setItem(sep_row, 0, item)
+        for _ in range(2):  # 두 줄 구분선
+            sep_row = self.table.rowCount()
+            self.table.insertRow(sep_row)
+            self.table.setRowHeight(sep_row, 1)
+            self.table.setSpan(sep_row, 0, 1, 5)
+            item = QTableWidgetItem()
+            item.setBackground(QColor('#9E9E9E'))
+            self.table.setItem(sep_row, 0, item)
 
     def _flush_blog_span(self, end_row: int):
         """블로그 단위 span: col 0(블로그 주소), col 1(방문자수)"""
