@@ -79,7 +79,7 @@ class LeftPanel(QWidget):
 
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
-            'wowmediasp\n'
+            'blog_id1\n'
             'blog_id2\n'
             'blog_id3'
         )
