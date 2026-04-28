@@ -30,15 +30,31 @@ SPINBOX_STYLE = (
     'QSpinBox::down-button:pressed { background-color: #BBDEFB; }'
 )
 
+BTN_SELECTED = (
+    'QPushButton {'
+    '  background-color: #1565C0; color: white;'
+    '  border: none; border-radius: 4px; font-weight: bold;'
+    '}'
+)
+BTN_NORMAL = (
+    'QPushButton {'
+    '  background-color: #F5F5F5; color: #424242;'
+    '  border: 1px solid #BDBDBD; border-radius: 4px;'
+    '}'
+    'QPushButton:hover { background-color: #E3F2FD; }'
+)
+
 
 class LeftPanel(QWidget):
-    # urls, post_count, keyword_count, rank_limit
+    # blog_ids, post_count, keyword_count, rank_limit
     analyze_requested = pyqtSignal(object, int, int, int)
 
     def __init__(self):
         super().__init__()
         self.setMinimumWidth(340)
         self.setMaximumWidth(480)
+        self._post_count = 5
+        self._post_count_btns = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -55,16 +71,17 @@ class LeftPanel(QWidget):
         sep.setStyleSheet('background: #E0E0E0;')
         layout.addWidget(sep)
 
-        # URL 입력
-        url_label = QLabel('블로그 주소 입력')
-        url_label.setFont(QFont('', 10, QFont.Bold))
-        url_hint = QLabel('한 줄에 하나씩 입력하세요')
-        url_hint.setStyleSheet('color: #757575; font-size: 9pt;')
+        # 블로그 ID 입력
+        id_label = QLabel('블로그 ID 입력')
+        id_label.setFont(QFont('', 10, QFont.Bold))
+        id_hint = QLabel('한 줄에 하나씩 입력하세요')
+        id_hint.setStyleSheet('color: #757575; font-size: 9pt;')
 
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
-            'https://blog.naver.com/blog_id/post_no\n'
-            'https://blog.naver.com/blog_id2/post_no2'
+            'wowmediasp\n'
+            'blog_id2\n'
+            'blog_id3'
         )
         self.url_input.setMinimumHeight(180)
         self.url_input.setStyleSheet(
@@ -72,15 +89,12 @@ class LeftPanel(QWidget):
             'QTextEdit:focus { border-color: #1976D2; }'
         )
 
-        layout.addWidget(url_label)
-        layout.addWidget(url_hint)
+        layout.addWidget(id_label)
+        layout.addWidget(id_hint)
         layout.addWidget(self.url_input)
 
-        # 최근 게시물 개수
-        layout.addLayout(self._make_spinbox_row(
-            '최근 게시물 제목 추출 개수', 'post_count',
-            min_val=1, max_val=20, default=2, suffix=' 개',
-        ))
+        # 최근 게시물 추출 개수 (토글 버튼 1~5)
+        layout.addLayout(self._make_post_count_buttons())
 
         # 키워드 추출 개수
         layout.addLayout(self._make_spinbox_row(
@@ -88,7 +102,7 @@ class LeftPanel(QWidget):
             min_val=1, max_val=10, default=3, suffix=' 개',
         ))
 
-        # 순위 탐색 범위 (신규)
+        # 순위 탐색 범위
         layout.addLayout(self._make_spinbox_row(
             '순위 탐색 범위', 'rank_limit',
             min_val=1, max_val=100, default=10, suffix=' 위',
@@ -130,6 +144,38 @@ class LeftPanel(QWidget):
 
         layout.addStretch()
 
+    def _make_post_count_buttons(self) -> QVBoxLayout:
+        outer = QVBoxLayout()
+        outer.setSpacing(6)
+
+        lbl = QLabel('최근 게시물 추출 개수')
+        outer.addWidget(lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+
+        for n in range(1, 6):
+            btn = QPushButton(str(n))
+            btn.setFixedSize(40, 32)
+            btn.setFont(QFont('', 10, QFont.Bold))
+            btn.clicked.connect(lambda _, val=n: self._on_post_count_clicked(val))
+            self._post_count_btns.append(btn)
+            btn_row.addWidget(btn)
+
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
+
+        self._refresh_post_count_style()
+        return outer
+
+    def _on_post_count_clicked(self, value: int):
+        self._post_count = value
+        self._refresh_post_count_style()
+
+    def _refresh_post_count_style(self):
+        for i, btn in enumerate(self._post_count_btns):
+            btn.setStyleSheet(BTN_SELECTED if (i + 1) == self._post_count else BTN_NORMAL)
+
     def _make_spinbox_row(
         self, label_text: str, attr_name: str,
         min_val: int, max_val: int, default: int,
@@ -163,15 +209,15 @@ class LeftPanel(QWidget):
 
     def _on_analyze_clicked(self):
         text = self.url_input.toPlainText().strip()
-        urls = [line.strip() for line in text.splitlines() if line.strip()]
+        blog_ids = [line.strip() for line in text.splitlines() if line.strip()]
 
-        if not urls:
-            self.status_label.setText('블로그 주소를 입력해주세요.')
+        if not blog_ids:
+            self.status_label.setText('블로그 ID를 입력해주세요.')
             return
 
         self.analyze_requested.emit(
-            urls,
-            self.post_count.value(),
+            blog_ids,
+            self._post_count,
             self.kw_count.value(),
             self.rank_limit.value(),
         )

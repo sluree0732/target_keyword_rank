@@ -1,3 +1,4 @@
+import re
 import xml.etree.ElementTree as ET
 
 import requests
@@ -12,13 +13,68 @@ HEADERS = {
     'Accept-Language': 'ko-KR,ko;q=0.9',
 }
 
+MOBILE_HEADERS = {
+    'User-Agent': (
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+        'Version/16.0 Mobile/15E148 Safari/604.1'
+    ),
+    'Accept-Language': 'ko-KR,ko;q=0.9',
+}
 
-def get_recent_posts(blog_id: str, count: int) -> list:
-    """RSS 피드로 최근 게시글 N개 반환. 실패 시 HTML 파싱 시도."""
+
+def get_blog_data(blog_id: str, count: int) -> dict:
+    """
+    모바일 블로그 페이지에서 오늘 방문자수 수집,
+    RSS 피드에서 최근 N개 게시글 수집.
+
+    반환: {'visitor_today': int, 'posts': [{'title', 'url', 'blog_id'}]}
+    """
+    visitor_today = _fetch_visitor_count(blog_id)
+
     try:
-        return _fetch_via_rss(blog_id, count)
+        posts = _fetch_via_rss(blog_id, count)
     except Exception:
-        return _fetch_via_html(blog_id, count)
+        posts = _fetch_via_html(blog_id, count)
+
+    return {'visitor_today': visitor_today, 'posts': posts}
+
+
+def _fetch_visitor_count(blog_id: str) -> int:
+    """모바일 블로그 페이지에서 오늘 방문자수 파싱. 실패 시 0 반환."""
+    try:
+        url = (
+            f'https://m.blog.naver.com/{blog_id}'
+            '?categoryNo=0&listStyle=post&tab=1'
+        )
+        resp = requests.get(url, headers=MOBILE_HEADERS, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'lxml')
+
+        # 시도 1: 방문자 수 전용 요소 선택자
+        for selector in [
+            '.blog_visitor .num',
+            '.visitorcnt',
+            '.today_cnt',
+            '.area_visit_today em',
+            '.visitor_today',
+            'em.num_today',
+        ]:
+            el = soup.select_one(selector)
+            if el:
+                m = re.search(r'\d+', el.get_text())
+                if m:
+                    return int(m.group())
+
+        # 시도 2: 전체 텍스트에서 "오늘 N" 패턴 검색
+        m = re.search(r'오늘\s+(\d[\d,]*)', soup.get_text())
+        if m:
+            return int(m.group(1).replace(',', ''))
+
+    except Exception:
+        pass
+
+    return 0
 
 
 def _fetch_via_rss(blog_id: str, count: int) -> list:

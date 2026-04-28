@@ -44,9 +44,11 @@ class RightPanel(QWidget):
         self.legend.setStyleSheet('font-size: 9pt; color: #9E9E9E;')
         layout.addWidget(self.legend)
 
-        # 테이블
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(['블로그 주소', '게시글 제목', '키워드', '순위'])
+        # 테이블 — 5컬럼
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(
+            ['블로그 주소', '오늘 방문자', '게시글 제목', '키워드', '순위']
+        )
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -64,9 +66,10 @@ class RightPanel(QWidget):
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.table)
 
@@ -87,9 +90,17 @@ class RightPanel(QWidget):
         self.download_btn.clicked.connect(self._on_download)
         layout.addWidget(self.download_btn)
 
-    def add_result(self, blog_url: str, post_title: str, keyword: str, rank: int):
+    def add_result(
+        self,
+        blog_url: str,
+        visitor_count: int,
+        post_title: str,
+        keyword: str,
+        rank: int,
+    ):
         self._results.append({
             'blog_url': blog_url,
+            'visitor_count': visitor_count,
             'post_title': post_title,
             'keyword': keyword,
             'rank': rank,
@@ -98,8 +109,8 @@ class RightPanel(QWidget):
         row = self.table.rowCount()
         self.table.insertRow(row)
 
-        # rank == 0 → 범위 밖 → "-"
         rank_text = f'{rank}위' if rank > 0 else '-'
+        visitor_text = str(visitor_count) if visitor_count > 0 else '-'
 
         def make_item(text, align=Qt.AlignVCenter | Qt.AlignLeft):
             item = QTableWidgetItem(text)
@@ -107,8 +118,9 @@ class RightPanel(QWidget):
             return item
 
         self.table.setItem(row, 0, make_item(blog_url))
-        self.table.setItem(row, 1, make_item(post_title))
-        self.table.setItem(row, 2, make_item(keyword))
+        self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
+        self.table.setItem(row, 2, make_item(post_title))
+        self.table.setItem(row, 3, make_item(keyword))
 
         rank_item = make_item(rank_text, Qt.AlignCenter)
         if rank > 0:
@@ -117,7 +129,7 @@ class RightPanel(QWidget):
         else:
             rank_item.setForeground(QColor('#B71C1C'))
 
-        self.table.setItem(row, 3, rank_item)
+        self.table.setItem(row, 4, rank_item)
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
@@ -125,7 +137,7 @@ class RightPanel(QWidget):
         self.legend.setStyleSheet('font-size: 9pt;')
         self.legend.setText(
             f'■ <span style="color:#1B5E20;font-weight:bold;">1~{rank_limit}위</span>'
-            f'&nbsp;&nbsp;&nbsp;'
+            '&nbsp;&nbsp;&nbsp;'
             f'■ <span style="color:#B71C1C;font-weight:bold;">순위 밖 (-)</span>'
         )
 
@@ -155,7 +167,6 @@ class RightPanel(QWidget):
 
         try:
             export_to_excel(self._results, filepath)
-            # 저장 완료 팝업
             count = len(self._results)
             filename = os.path.basename(filepath)
             msg = QMessageBox(self)
