@@ -22,6 +22,7 @@ class RightPanel(QWidget):
     def __init__(self):
         super().__init__()
         self._results = []
+        self._last_post_key = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -117,9 +118,19 @@ class RightPanel(QWidget):
             item.setTextAlignment(align)
             return item
 
-        self.table.setItem(row, 0, make_item(blog_url))
-        self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
-        self.table.setItem(row, 2, make_item(post_title))
+        post_key = (blog_url, post_title)
+        is_same_post = (post_key == self._last_post_key)
+        self._last_post_key = post_key
+
+        if is_same_post:
+            self.table.setItem(row, 0, make_item(''))
+            self.table.setItem(row, 1, make_item('', Qt.AlignCenter))
+            self.table.setItem(row, 2, make_item(''))
+        else:
+            self.table.setItem(row, 0, make_item(blog_url))
+            self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
+            self.table.setItem(row, 2, make_item(post_title))
+
         self.table.setItem(row, 3, make_item(keyword))
 
         rank_item = make_item(rank_text, Qt.AlignCenter)
@@ -144,6 +155,7 @@ class RightPanel(QWidget):
     def clear_results(self):
         self.table.setRowCount(0)
         self._results.clear()
+        self._last_post_key = None
         self.download_btn.setEnabled(False)
 
     def _on_download(self):
