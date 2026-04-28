@@ -119,6 +119,9 @@ class RightPanel(QWidget):
             # 새 블로그 — 이전 post/blog 그룹 모두 flush 후 두 그룹 모두 시작
             self._flush_post_span(row)
             self._flush_blog_span(row)
+            if self._blog_group_key is not None:  # 첫 블로그는 구분선 없음
+                self._insert_separator()
+                row = self.table.rowCount()       # 구분선 삽입 후 행 번호 재취득
             self._blog_group_key = blog_key
             self._blog_group_start_row = row
             self._post_group_key = post_key
@@ -154,6 +157,16 @@ class RightPanel(QWidget):
         self.table.setItem(row, 4, rank_item)
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
+
+    def _insert_separator(self):
+        sep_row = self.table.rowCount()
+        self.table.insertRow(sep_row)
+        self.table.setRowHeight(sep_row, 4)
+        self.table.setSpan(sep_row, 0, 1, 5)
+        item = QTableWidgetItem()
+        item.setBackground(QColor('#1565C0'))
+        item.setFlags(Qt.NoItemFlags)
+        self.table.setItem(sep_row, 0, item)
 
     def _flush_blog_span(self, end_row: int):
         """블로그 단위 span: col 0(블로그 주소), col 1(방문자수)"""
