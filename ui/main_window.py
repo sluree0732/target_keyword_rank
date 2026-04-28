@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QMainWindow, QSplitter
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QSplitter
 
 from core.analyzer import AnalyzerThread
 from ui.left_panel import LeftPanel
@@ -15,6 +15,7 @@ class MainWindow(QMainWindow):
         self.resize(1400, 800)
         self.setWindowIcon(self.style().standardIcon(self.style().SP_ComputerIcon))
         self._analyzer = None
+        self._errors = []
 
         splitter = QSplitter(Qt.Horizontal)
         self.left_panel = LeftPanel()
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
             self._analyzer.cancel()
             self._analyzer.wait()
 
+        self._errors.clear()
         self.right_panel.clear_results()
         self.right_panel.update_legend(rank_limit)
         self.left_panel.set_analyzing(True)
@@ -54,12 +56,23 @@ class MainWindow(QMainWindow):
         self._analyzer.start()
 
     def _on_error(self, message: str):
+        self._errors.append(message)
         self.left_panel.update_status(f'⚠ {message}')
 
     def _on_finished(self):
         self.left_panel.set_analyzing(False)
         count = self.right_panel.table.rowCount()
         self.left_panel.update_status(f'분석 완료 — 총 {count}건')
+
+        if count == 0 and self._errors:
+            error_text = '\n'.join(f'• {e}' for e in self._errors)
+            msg = QMessageBox(self)
+            msg.setWindowTitle('분석 오류')
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('분석 결과가 없습니다. 아래 오류를 확인해주세요.')
+            msg.setDetailedText(error_text)
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
 
     def closeEvent(self, event):
         if self._analyzer and self._analyzer.isRunning():
