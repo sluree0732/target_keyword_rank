@@ -3,31 +3,12 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QProgressBar,
     QPushButton,
-    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-)
-
-SPINBOX_STYLE = (
-    'QSpinBox { border: 1px solid #BDBDBD; border-radius: 4px; padding: 2px 4px; }'
-    'QSpinBox:focus { border-color: #1976D2; }'
-    'QSpinBox::up-button {'
-    '  subcontrol-origin: border; subcontrol-position: top right;'
-    '  width: 18px; background-color: #F5F5F5;'
-    '  border-left: 1px solid #BDBDBD;'
-    '}'
-    'QSpinBox::up-button:hover { background-color: #E3F2FD; }'
-    'QSpinBox::up-button:pressed { background-color: #BBDEFB; }'
-    'QSpinBox::down-button {'
-    '  subcontrol-origin: border; subcontrol-position: bottom right;'
-    '  width: 18px; background-color: #F5F5F5;'
-    '  border-left: 1px solid #BDBDBD; border-top: 1px solid #BDBDBD;'
-    '}'
-    'QSpinBox::down-button:hover { background-color: #E3F2FD; }'
-    'QSpinBox::down-button:pressed { background-color: #BBDEFB; }'
 )
 
 BTN_SELECTED = (
@@ -46,8 +27,8 @@ BTN_NORMAL = (
 
 
 class LeftPanel(QWidget):
-    # blog_ids, post_count, keyword_count, rank_limit
-    analyze_requested = pyqtSignal(object, int, int, int)
+    # blog_ids, post_count, keyword_count, rank_limit, keyword_grade
+    analyze_requested = pyqtSignal(object, int, int, int, int)
 
     def __init__(self):
         super().__init__()
@@ -55,6 +36,10 @@ class LeftPanel(QWidget):
         self.setMaximumWidth(480)
         self._post_count = 5
         self._post_count_btns = []
+        self._kw_count = 3
+        self._kw_count_btns = []
+        self._kw_grade = 5
+        self._kw_grade_btns = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -83,7 +68,7 @@ class LeftPanel(QWidget):
             'blog_id2\n'
             'blog_id3'
         )
-        self.url_input.setMinimumHeight(180)
+        self.url_input.setMinimumHeight(160)
         self.url_input.setStyleSheet(
             'QTextEdit { border: 1px solid #BDBDBD; border-radius: 4px; padding: 6px; }'
             'QTextEdit:focus { border-color: #1976D2; }'
@@ -94,20 +79,28 @@ class LeftPanel(QWidget):
         layout.addWidget(self.url_input)
 
         # 최근 게시물 추출 개수 (토글 버튼 1~5)
-        layout.addLayout(self._make_post_count_buttons())
-
-        # 키워드 추출 개수
-        layout.addLayout(self._make_spinbox_row(
-            '키워드 추출 개수', 'kw_count',
-            min_val=1, max_val=10, default=3, suffix=' 개',
+        layout.addLayout(self._make_toggle_row(
+            '최근 게시물 추출 개수', 1, 5, 5,
+            self._post_count_btns,
+            self._on_post_count_clicked,
         ))
 
-        # 순위 탐색 범위
-        layout.addLayout(self._make_spinbox_row(
-            '순위 탐색 범위', 'rank_limit',
-            min_val=1, max_val=100, default=10, suffix=' 위',
-            hint='설정값 이내 없으면 "-" 표시',
+        # 키워드 추출 개수 (토글 버튼 1~5)
+        layout.addLayout(self._make_toggle_row(
+            '키워드 추출 개수', 1, 5, 3,
+            self._kw_count_btns,
+            self._on_kw_count_clicked,
         ))
+
+        # 키워드 등급 (토글 버튼 1~5, 1=세부, 5=대표)
+        layout.addLayout(self._make_toggle_row(
+            '키워드 등급  (1=세부  ↔  5=대표)', 1, 5, 5,
+            self._kw_grade_btns,
+            self._on_kw_grade_clicked,
+        ))
+
+        # 순위 탐색 범위 (텍스트 입력)
+        layout.addLayout(self._make_rank_limit_row())
 
         # 분석 시작 버튼
         self.analyze_btn = QPushButton('분석 시작')
@@ -144,66 +137,79 @@ class LeftPanel(QWidget):
 
         layout.addStretch()
 
-    def _make_post_count_buttons(self) -> QVBoxLayout:
+    def _make_toggle_row(
+        self,
+        label_text: str,
+        start: int,
+        end: int,
+        default: int,
+        btn_list: list,
+        handler,
+    ) -> QVBoxLayout:
         outer = QVBoxLayout()
         outer.setSpacing(6)
 
-        lbl = QLabel('최근 게시물 추출 개수')
+        lbl = QLabel(label_text)
         outer.addWidget(lbl)
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
 
-        for n in range(1, 6):
+        for n in range(start, end + 1):
             btn = QPushButton(str(n))
             btn.setFixedSize(40, 32)
             btn.setFont(QFont('', 10, QFont.Bold))
-            btn.clicked.connect(lambda _, val=n: self._on_post_count_clicked(val))
-            self._post_count_btns.append(btn)
+            btn.clicked.connect(lambda _, val=n: handler(val))
+            btn_list.append(btn)
             btn_row.addWidget(btn)
 
         btn_row.addStretch()
         outer.addLayout(btn_row)
 
-        self._refresh_post_count_style()
+        self._refresh_toggle_style(btn_list, default, start)
         return outer
+
+    def _refresh_toggle_style(self, btn_list: list, selected: int, start: int = 1):
+        for i, btn in enumerate(btn_list):
+            btn.setStyleSheet(BTN_SELECTED if (i + start) == selected else BTN_NORMAL)
 
     def _on_post_count_clicked(self, value: int):
         self._post_count = value
-        self._refresh_post_count_style()
+        self._refresh_toggle_style(self._post_count_btns, value)
 
-    def _refresh_post_count_style(self):
-        for i, btn in enumerate(self._post_count_btns):
-            btn.setStyleSheet(BTN_SELECTED if (i + 1) == self._post_count else BTN_NORMAL)
+    def _on_kw_count_clicked(self, value: int):
+        self._kw_count = value
+        self._refresh_toggle_style(self._kw_count_btns, value)
 
-    def _make_spinbox_row(
-        self, label_text: str, attr_name: str,
-        min_val: int, max_val: int, default: int,
-        suffix: str = '', hint: str = '',
-    ) -> QVBoxLayout:
+    def _on_kw_grade_clicked(self, value: int):
+        self._kw_grade = value
+        self._refresh_toggle_style(self._kw_grade_btns, value)
+
+    def _make_rank_limit_row(self) -> QVBoxLayout:
         outer = QVBoxLayout()
         outer.setSpacing(2)
 
         row = QHBoxLayout()
-        lbl = QLabel(label_text)
-        spin = QSpinBox()
-        spin.setRange(min_val, max_val)
-        spin.setValue(default)
-        spin.setFixedWidth(76)
-        spin.setSuffix(suffix)
-        spin.setStyleSheet(SPINBOX_STYLE)
-        setattr(self, attr_name, spin)
+        lbl = QLabel('순위 탐색 범위')
+        self.rank_limit_input = QLineEdit('5')
+        self.rank_limit_input.setFixedWidth(76)
+        self.rank_limit_input.setAlignment(Qt.AlignCenter)
+        self.rank_limit_input.setStyleSheet(
+            'QLineEdit { border: 1px solid #BDBDBD; border-radius: 4px; padding: 2px 4px; }'
+            'QLineEdit:focus { border-color: #1976D2; }'
+        )
 
         row.addWidget(lbl)
         row.addStretch()
-        row.addWidget(spin)
+        row.addWidget(QLabel('상위'))
+        row.addWidget(self.rank_limit_input)
+        row.addWidget(QLabel('위'))
         outer.addLayout(row)
 
-        if hint:
-            hint_lbl = QLabel(hint)
-            hint_lbl.setStyleSheet('color: #9E9E9E; font-size: 8pt;')
-            hint_lbl.setAlignment(Qt.AlignRight)
-            outer.addWidget(hint_lbl)
+        hint_lbl = QLabel('설정값 이내 없으면 "-" 표시')
+        hint_lbl.setStyleSheet('color: #9E9E9E; font-size: 8pt;')
+        hint_lbl.setAlignment(Qt.AlignRight)
+        outer.addWidget(hint_lbl)
 
         return outer
 
@@ -215,11 +221,20 @@ class LeftPanel(QWidget):
             self.status_label.setText('블로그 ID를 입력해주세요.')
             return
 
+        try:
+            rank_limit = int(self.rank_limit_input.text().strip())
+            if rank_limit < 1:
+                raise ValueError
+        except ValueError:
+            self.status_label.setText('순위 탐색 범위를 올바른 숫자로 입력해주세요.')
+            return
+
         self.analyze_requested.emit(
             blog_ids,
             self._post_count,
-            self.kw_count.value(),
-            self.rank_limit.value(),
+            self._kw_count,
+            rank_limit,
+            self._kw_grade,
         )
 
     def set_analyzing(self, analyzing: bool):
