@@ -165,7 +165,7 @@ class RightPanel(QWidget):
             self.table.setRowHeight(sep_row, 1)
             self.table.setSpan(sep_row, 0, 1, 5)
             item = QTableWidgetItem()
-            item.setBackground(QColor('#9E9E9E'))
+            item.setBackground(QColor('#000000'))
             self.table.setItem(sep_row, 0, item)
 
     def _flush_blog_span(self, end_row: int):
