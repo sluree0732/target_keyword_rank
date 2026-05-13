@@ -13,16 +13,16 @@ from PyQt5.QtWidgets import (
 
 BTN_SELECTED = (
     'QPushButton {'
-    '  background-color: #1565C0; color: white;'
-    '  border: none; border-radius: 4px; font-weight: bold;'
+    '  background-color: #1D4F91; color: white;'
+    '  border: none; border-radius: 5px; font-weight: bold;'
     '}'
 )
 BTN_NORMAL = (
     'QPushButton {'
-    '  background-color: #F5F5F5; color: #424242;'
-    '  border: 1px solid #BDBDBD; border-radius: 4px;'
+    '  background-color: #FFFFFF; color: #374151;'
+    '  border: 1px solid #CBD5E1; border-radius: 5px;'
     '}'
-    'QPushButton:hover { background-color: #E3F2FD; }'
+    'QPushButton:hover { background-color: #EFF6FF; border-color: #93C5FD; }'
 )
 
 
@@ -32,23 +32,24 @@ class LeftPanel(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setMinimumWidth(340)
-        self.setMaximumWidth(480)
+        self.setMinimumWidth(320)
+        self.setMaximumWidth(420)
         self._post_count = 5
         self._post_count_btns = []
         self._kw_count = 3
         self._kw_count_btns = []
-        self._kw_grade = 5
+        self._kw_grade = 3
         self._kw_grade_btns = []
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(14)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+        layout.setContentsMargins(18, 20, 18, 18)
 
         title = QLabel('블로그 분석 설정')
-        title.setFont(QFont('', 13, QFont.Bold))
+        title.setFont(QFont('', 15, QFont.Bold))
+        title.setStyleSheet('color: #111827;')
         layout.addWidget(title)
 
         sep = QLabel()
@@ -70,8 +71,11 @@ class LeftPanel(QWidget):
         )
         self.url_input.setMinimumHeight(160)
         self.url_input.setStyleSheet(
-            'QTextEdit { border: 1px solid #BDBDBD; border-radius: 4px; padding: 6px; }'
-            'QTextEdit:focus { border-color: #1976D2; }'
+            'QTextEdit {'
+            '  background: white; border: 1px solid #CBD5E1;'
+            '  border-radius: 6px; padding: 8px;'
+            '}'
+            'QTextEdit:focus { border-color: #2563EB; }'
         )
 
         layout.addWidget(id_label)
@@ -94,7 +98,7 @@ class LeftPanel(QWidget):
 
         # 키워드 등급 (토글 버튼 1~5, 1=세부, 5=대표)
         layout.addLayout(self._make_toggle_row(
-            '키워드 등급  (1=세부  ↔  5=대표)', 1, 5, 5,
+            '키워드 등급  (1=세부  ↔  5=대표)', 1, 5, 3,
             self._kw_grade_btns,
             self._on_kw_grade_clicked,
         ))
@@ -104,16 +108,17 @@ class LeftPanel(QWidget):
 
         # 분석 시작 버튼
         self.analyze_btn = QPushButton('분석 시작')
-        self.analyze_btn.setMinimumHeight(44)
-        self.analyze_btn.setFont(QFont('', 11, QFont.Bold))
+        self.analyze_btn.setMinimumHeight(50)
+        self.analyze_btn.setFont(QFont('', 12, QFont.Bold))
+        self.analyze_btn.setCursor(Qt.PointingHandCursor)
         self.analyze_btn.setStyleSheet(
             'QPushButton {'
-            '  background-color: #1565C0; color: white;'
+            '  background-color: #1D4F91; color: white;'
             '  border-radius: 6px; border: none;'
             '}'
-            'QPushButton:hover { background-color: #1976D2; }'
-            'QPushButton:pressed { background-color: #0D47A1; }'
-            'QPushButton:disabled { background-color: #90A4AE; }'
+            'QPushButton:hover { background-color: #2563EB; }'
+            'QPushButton:pressed { background-color: #1E3A8A; }'
+            'QPushButton:disabled { background-color: #A7B0BA; }'
         )
         self.analyze_btn.clicked.connect(self._on_analyze_clicked)
         layout.addWidget(self.analyze_btn)
@@ -153,12 +158,13 @@ class LeftPanel(QWidget):
         outer.addWidget(lbl)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(8)
 
         for n in range(start, end + 1):
             btn = QPushButton(str(n))
-            btn.setFixedSize(40, 32)
-            btn.setFont(QFont('', 10, QFont.Bold))
+            btn.setFixedSize(46, 36)
+            btn.setFont(QFont('', 11, QFont.Bold))
+            btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _, val=n: handler(val))
             btn_list.append(btn)
             btn_row.addWidget(btn)
@@ -195,8 +201,8 @@ class LeftPanel(QWidget):
         self.rank_limit_input.setFixedWidth(76)
         self.rank_limit_input.setAlignment(Qt.AlignCenter)
         self.rank_limit_input.setStyleSheet(
-            'QLineEdit { border: 1px solid #BDBDBD; border-radius: 4px; padding: 2px 4px; }'
-            'QLineEdit:focus { border-color: #1976D2; }'
+            'QLineEdit { border: 1px solid #CBD5E1; border-radius: 5px; padding: 4px 6px; }'
+            'QLineEdit:focus { border-color: #2563EB; }'
         )
 
         input_row = QHBoxLayout()

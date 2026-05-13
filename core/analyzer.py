@@ -24,8 +24,8 @@ def _load_api_key() -> str:
 
 
 class AnalyzerThread(QThread):
-    # blog_url, visitor_count, post_title, keyword, rank
-    result_ready = pyqtSignal(str, int, str, str, int)
+    # blog_url, visitor_count, post_title, keyword, rank, post_url
+    result_ready = pyqtSignal(str, int, str, str, int, str)
     status_updated = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     finished_all = pyqtSignal()
@@ -154,6 +154,6 @@ class AnalyzerThread(QThread):
                     except Exception:
                         rank = 0
 
-                    self.result_ready.emit(blog_url, visitor_count, title, keyword, rank)
+                    self.result_ready.emit(blog_url, visitor_count, title, keyword, rank, post_url)
 
         self.finished_all.emit()

@@ -1,10 +1,14 @@
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QTimer, Qt, QUrl
 from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
@@ -18,81 +22,192 @@ from PyQt5.QtWidgets import (
 from utils.excel_exporter import export_to_excel
 
 
+def _display_blog_id(blog_url: str) -> str:
+    value = blog_url.strip()
+    if value.startswith('https://'):
+        value = value[len('https://'):]
+    elif value.startswith('http://'):
+        value = value[len('http://'):]
+
+    value = value.rstrip('/')
+    if value.startswith('blog.naver.com/'):
+        return value.split('/', 1)[1].split('/', 1)[0]
+    return value
+
+
+def _top_rank_blog_label(results: list) -> str:
+    ranked = [item for item in results if item.get('rank', 0) > 0]
+    if not ranked:
+        return '-'
+
+    best = min(ranked, key=lambda item: item['rank'])
+    return f"{_display_blog_id(best['blog_url'])} ({best['rank']}위)"
+
+
 class RightPanel(QWidget):
+    POST_URL_ROLE = Qt.UserRole + 1
+    BLOG_URL_ROLE = Qt.UserRole + 2
+
     def __init__(self):
         super().__init__()
         self._results = []
-        self._blog_group_start_row = -1
-        self._blog_group_key = None
-        self._post_group_start_row = -1
-        self._post_group_key = None
+        self._initial_column_widths_applied = False
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        layout.setContentsMargins(16, 20, 20, 20)
+        layout.setSpacing(14)
+        layout.setContentsMargins(18, 20, 20, 18)
+
+        header_row = QHBoxLayout()
+        header_row.setSpacing(12)
 
         title = QLabel('분석 결과')
-        title.setFont(QFont('', 13, QFont.Bold))
-        layout.addWidget(title)
+        title.setFont(QFont('', 15, QFont.Bold))
+        title.setStyleSheet('color: #111827;')
+        header_row.addWidget(title)
+        header_row.addStretch()
 
-        sep = QLabel()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet('background: #E0E0E0;')
-        layout.addWidget(sep)
+        self.download_btn = QPushButton('엑셀 다운로드')
+        self.download_btn.setMinimumHeight(38)
+        self.download_btn.setMinimumWidth(132)
+        self.download_btn.setFont(QFont('', 10, QFont.Bold))
+        self.download_btn.setEnabled(False)
+        self.download_btn.setCursor(Qt.PointingHandCursor)
+        self.download_btn.setStyleSheet(
+            'QPushButton {'
+            '  background-color: #1F7A3A; color: white;'
+            '  border-radius: 6px; border: none; padding: 0 16px;'
+            '}'
+            'QPushButton:hover { background-color: #238447; }'
+            'QPushButton:pressed { background-color: #145A2A; }'
+            'QPushButton:disabled { background-color: #A7B0BA; }'
+        )
+        self.download_btn.clicked.connect(self._on_download)
+        header_row.addWidget(self.download_btn)
+        layout.addLayout(header_row)
 
-        # 범례 (분석 시작 시 동적 갱신)
-        self.legend = QLabel('분석을 시작하면 범례가 표시됩니다.')
-        self.legend.setTextFormat(Qt.RichText)
-        self.legend.setStyleSheet('font-size: 9pt; color: #9E9E9E;')
-        layout.addWidget(self.legend)
+        self.summary_frame = QFrame()
+        self.summary_frame.setStyleSheet(
+            'QFrame { background: #F8FAFC; border: 1px solid #E5E7EB; border-radius: 8px; }'
+            'QLabel { border: none; background: transparent; }'
+        )
+        summary_layout = QGridLayout(self.summary_frame)
+        summary_layout.setContentsMargins(14, 10, 14, 10)
+        summary_layout.setHorizontalSpacing(28)
+        summary_layout.setVerticalSpacing(2)
 
-        # 테이블 — 5컬럼
+        self.total_value = self._make_metric_value()
+        self.exposed_value = self._make_metric_value('#166534')
+        self.missing_value = self._make_metric_value('#B91C1C')
+        self.legend_value = self._make_metric_value('#374151')
+        self.top_blog_value = self._make_metric_value('#1D4F91')
+
+        for col, (label, value) in enumerate([
+            ('총 결과', self.total_value),
+            ('노출 키워드', self.exposed_value),
+            ('순위 밖', self.missing_value),
+            ('기준', self.legend_value),
+            ('상위 블로그', self.top_blog_value),
+        ]):
+            label_widget = QLabel(label)
+            label_widget.setStyleSheet('color: #6B7280; font-size: 9pt;')
+            summary_layout.addWidget(label_widget, 0, col)
+            summary_layout.addWidget(value, 1, col)
+
+        summary_layout.setColumnStretch(4, 1)
+        layout.addWidget(self.summary_frame)
+
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ['블로그 주소', '오늘 방문자수', '게시글 제목', '키워드', '순위']
+            ['블로그', '방문자수', '게시글 제목', '키워드', '순위']
         )
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionMode(QTableWidget.NoSelection)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
+        self.table.setMouseTracking(True)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(42)
         self.table.setStyleSheet(
-            'QTableWidget { border: 1px solid #E0E0E0; }'
-            'QTableWidget::item { padding: 6px; }'
-            'QHeaderView::section {'
-            '  background-color: #1565C0; color: white;'
-            '  font-weight: bold; padding: 8px; border: none;'
+            'QTableWidget {'
+            '  background: white; border: 1px solid #D8DEE8; border-radius: 6px;'
+            '  gridline-color: transparent; selection-background-color: #DCEBFF;'
+            '  selection-color: #111827;'
             '}'
-            'QTableWidget::item:alternate { background-color: #F8F9FA; }'
+            'QTableWidget::item { padding: 8px 10px; border-bottom: 1px solid #EEF2F7; }'
+            'QTableWidget::item:selected { color: #111827; background: #DCEBFF; }'
+            'QTableWidget::item:alternate { background-color: #F9FAFB; }'
+            'QTableWidget::item:alternate:selected { color: #111827; background: #DCEBFF; }'
+            'QHeaderView::section {'
+            '  background-color: #1D4F91; color: white; font-weight: bold;'
+            '  padding: 9px 10px; border: none; border-right: 1px solid #2B64AD;'
+            '}'
         )
 
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setHighlightSections(False)
+        header.setDefaultAlignment(Qt.AlignCenter)
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        header.setSectionResizeMode(3, QHeaderView.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.Interactive)
+        self._apply_default_column_widths()
+        QTimer.singleShot(0, self._apply_default_column_widths)
+        self.table.cellDoubleClicked.connect(self._open_post_for_row)
 
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
+        self.update_legend(5)
 
-        # 다운로드 버튼
-        self.download_btn = QPushButton('엑셀 다운로드')
-        self.download_btn.setMinimumHeight(40)
-        self.download_btn.setFont(QFont('', 10, QFont.Bold))
-        self.download_btn.setEnabled(False)
-        self.download_btn.setStyleSheet(
-            'QPushButton {'
-            '  background-color: #2E7D32; color: white;'
-            '  border-radius: 6px; border: none;'
-            '}'
-            'QPushButton:hover { background-color: #388E3C; }'
-            'QPushButton:pressed { background-color: #1B5E20; }'
-            'QPushButton:disabled { background-color: #90A4AE; }'
-        )
-        self.download_btn.clicked.connect(self._on_download)
-        layout.addWidget(self.download_btn)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self._initial_column_widths_applied:
+            self._apply_default_column_widths()
+
+    def _make_metric_value(self, color='#111827'):
+        label = QLabel('0')
+        label.setFont(QFont('', 13, QFont.Bold))
+        label.setStyleSheet(f'color: {color};')
+        return label
+
+    def _apply_default_column_widths(self):
+        width = max(self.table.viewport().width(), self.table.width() - 4)
+        if width <= 0:
+            return
+
+        usable = max(width - 2, 0)
+        fixed_widths = {
+            0: max(int(usable * 0.07), 110),  # blog id
+            1: max(int(usable * 0.12), 110),  # visitor count
+            3: max(int(usable * 0.15), 210),  # keyword
+            4: max(int(usable * 0.03), 58),   # rank
+        }
+        minimum_title_width = 300
+        minimum_total = sum(fixed_widths.values()) + minimum_title_width
+
+        if minimum_total > usable and usable > minimum_title_width:
+            scale = (usable - minimum_title_width) / sum(fixed_widths.values())
+            fixed_widths = {
+                col: max(40, int(width_value * scale))
+                for col, width_value in fixed_widths.items()
+            }
+
+        side_total = sum(fixed_widths.values())
+        title_width = max(usable - side_total, minimum_title_width if usable >= minimum_total else 120)
+        overflow = side_total + title_width - usable
+        if overflow > 0:
+            title_width = max(80, title_width - overflow)
+
+        self.table.setColumnWidth(0, fixed_widths[0])
+        self.table.setColumnWidth(1, fixed_widths[1])
+        self.table.setColumnWidth(2, title_width)
+        self.table.setColumnWidth(3, fixed_widths[3])
+        self.table.setColumnWidth(4, fixed_widths[4])
+        self._initial_column_widths_applied = True
 
     def add_result(
         self,
@@ -101,6 +216,7 @@ class RightPanel(QWidget):
         post_title: str,
         keyword: str,
         rank: int,
+        post_url: str = '',
     ):
         self._results.append({
             'blog_url': blog_url,
@@ -108,112 +224,74 @@ class RightPanel(QWidget):
             'post_title': post_title,
             'keyword': keyword,
             'rank': rank,
+            'post_url': post_url,
         })
 
-        row = self.table.rowCount()  # insertRow 전에 확보
+        row = self.table.rowCount()
+        self.table.insertRow(row)
 
-        blog_key = blog_url
-        post_key = (blog_url, post_title)
-
-        if blog_key != self._blog_group_key:
-            # 새 블로그 — 이전 post/blog 그룹 모두 flush 후 두 그룹 모두 시작
-            self._flush_post_span(row)
-            self._flush_blog_span(row)
-            if self._blog_group_key is not None:  # 첫 블로그는 구분선 없음
-                self._insert_separator()
-                row = self.table.rowCount()       # 구분선 삽입 후 행 번호 재취득
-            self._blog_group_key = blog_key
-            self._blog_group_start_row = row
-            self._post_group_key = post_key
-            self._post_group_start_row = row
-        elif post_key != self._post_group_key:
-            # 같은 블로그, 새 게시글 — post 그룹만 flush 후 재시작
-            self._flush_post_span(row)
-            self._post_group_key = post_key
-            self._post_group_start_row = row
-
-        self.table.insertRow(row)  # flush 완료 후 삽입
-
-        rank_text = f'{rank}위' if rank > 0 else '-'
         visitor_text = str(visitor_count) if visitor_count > 0 else '-'
+        rank_text = f'{rank}위' if rank > 0 else '-'
 
-        def make_item(text, align=Qt.AlignVCenter | Qt.AlignLeft):
-            item = QTableWidgetItem(text)
-            item.setTextAlignment(align)
-            return item
+        blog_id = _display_blog_id(blog_url)
+        self.table.setItem(row, 0, self._make_item(blog_id, tooltip=blog_url))
+        self.table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
+        self.table.setItem(row, 2, self._make_item(post_title))
+        self.table.setItem(row, 3, self._make_item(keyword))
 
-        self.table.setItem(row, 0, make_item(blog_url))
-        self.table.setItem(row, 1, make_item(visitor_text, Qt.AlignCenter))
-        self.table.setItem(row, 2, make_item(post_title))
-        self.table.setItem(row, 3, make_item(keyword))
-
-        rank_item = make_item(rank_text, Qt.AlignCenter)
+        rank_item = self._make_item(rank_text, Qt.AlignCenter)
         if rank > 0:
-            rank_item.setForeground(QColor('#1B5E20'))
+            rank_item.setForeground(QColor('#166534'))
             rank_item.setFont(QFont('', -1, QFont.Bold))
         else:
-            rank_item.setForeground(QColor('#B71C1C'))
-
+            rank_item.setForeground(QColor('#B91C1C'))
         self.table.setItem(row, 4, rank_item)
+        for col in range(self.table.columnCount()):
+            item = self.table.item(row, col)
+            if item:
+                item.setData(self.POST_URL_ROLE, post_url)
+                item.setData(self.BLOG_URL_ROLE, blog_url)
+
+        self._update_summary()
         self.table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
-    def _insert_separator(self):
-        for _ in range(2):  # 두 줄 구분선
-            sep_row = self.table.rowCount()
-            self.table.insertRow(sep_row)
-            self.table.setRowHeight(sep_row, 1)
-            self.table.setSpan(sep_row, 0, 1, 5)
-            item = QTableWidgetItem()
-            item.setBackground(QColor('#000000'))
-            self.table.setItem(sep_row, 0, item)
+    def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(align)
+        item.setToolTip(tooltip or text)
+        return item
 
-    def _flush_blog_span(self, end_row: int):
-        """블로그 단위 span: col 0(블로그 주소), col 1(방문자수)"""
-        if self._blog_group_start_row < 0:
+    def _open_post_for_row(self, row: int, _column: int):
+        item = self.table.item(row, 0)
+        if not item:
             return
-        span = end_row - self._blog_group_start_row
-        if span <= 1:
-            return
-        for col in (0, 1):
-            self.table.setSpan(self._blog_group_start_row, col, span, 1)
-            item = self.table.item(self._blog_group_start_row, col)
-            if item:
-                item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
 
-    def _flush_post_span(self, end_row: int):
-        """게시글 단위 span: col 2(게시글 제목)"""
-        if self._post_group_start_row < 0:
-            return
-        span = end_row - self._post_group_start_row
-        if span <= 1:
-            return
-        self.table.setSpan(self._post_group_start_row, 2, span, 1)
-        item = self.table.item(self._post_group_start_row, 2)
-        if item:
-            item.setTextAlignment(Qt.AlignVCenter | Qt.AlignCenter)
+        post_url = item.data(self.POST_URL_ROLE)
+        if post_url:
+            QDesktopServices.openUrl(QUrl(post_url))
 
     def flush_last_group(self):
-        end_row = self.table.rowCount()
-        self._flush_post_span(end_row)
-        self._flush_blog_span(end_row)
+        self._update_summary()
 
     def update_legend(self, rank_limit: int):
-        self.legend.setStyleSheet('font-size: 9pt;')
-        self.legend.setText(
-            f'■ <span style="color:#1B5E20;font-weight:bold;">1~{rank_limit}위</span>'
-            '&nbsp;&nbsp;&nbsp;'
-            f'■ <span style="color:#B71C1C;font-weight:bold;">순위 밖 (-)</span>'
-        )
+        self.legend_value.setText(f'1~{rank_limit}위')
 
     def clear_results(self):
         self.table.setRowCount(0)
         self._results.clear()
-        self._blog_group_start_row = -1
-        self._blog_group_key = None
-        self._post_group_start_row = -1
-        self._post_group_key = None
         self.download_btn.setEnabled(False)
+        self._update_summary()
+
+    def _update_summary(self):
+        total = len(self._results)
+        exposed = sum(1 for item in self._results if item['rank'] > 0)
+        missing = total - exposed
+
+        self.total_value.setText(f'{total}건')
+        self.exposed_value.setText(f'{exposed}건')
+        self.missing_value.setText(f'{missing}건')
+        self.top_blog_value.setText(_top_rank_blog_label(self._results))
 
     def _on_download(self):
         timestamp = datetime.now().strftime('%y%m%d%H%M')
@@ -227,7 +305,7 @@ class RightPanel(QWidget):
         if os.path.exists(filepath):
             reply = QMessageBox.question(
                 self, '파일 덮어쓰기',
-                f'<b>{os.path.basename(filepath)}</b> 파일이 이미 존재합니다.<br>덮어쓰겠습니까?',
+                f'<b>{os.path.basename(filepath)}</b> 파일이 이미 존재합니다.<br>덮어쓰시겠습니까?',
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )

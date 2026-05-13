@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QSplitter
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QSplitter
 
 from core.analyzer import AnalyzerThread
 from ui.left_panel import LeftPanel
@@ -11,8 +11,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('타겟 키워드 노출 여부 분석')
-        self.setMinimumSize(1100, 650)
-        self.resize(1400, 800)
+        self.setMinimumSize(1180, 720)
+        self.resize(1360, 820)
         self.setWindowIcon(self.style().standardIcon(self.style().SP_ComputerIcon))
         self._analyzer = None
         self._errors = []
@@ -22,13 +22,30 @@ class MainWindow(QMainWindow):
         self.right_panel = RightPanel()
         splitter.addWidget(self.left_panel)
         splitter.addWidget(self.right_panel)
-        splitter.setSizes([400, 800])
-        splitter.setHandleWidth(2)
+        splitter.setSizes([360, 1000])
+        splitter.setHandleWidth(1)
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
 
         self.setCentralWidget(splitter)
-        self.setStyleSheet('QMainWindow { background: #FAFAFA; }')
+        self.setStyleSheet(
+            'QMainWindow { background: #F3F6FA; }'
+            'QWidget { font-family: "Malgun Gothic"; font-size: 10pt; }'
+            'QLabel { color: #111827; }'
+            'QSplitter::handle { background: #D8DEE8; }'
+        )
 
         self.left_panel.analyze_requested.connect(self._start_analysis)
+        self._center_on_screen()
+
+    def _center_on_screen(self):
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        available = screen.availableGeometry()
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def _start_analysis(
         self,
