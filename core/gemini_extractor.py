@@ -36,12 +36,16 @@ def extract_keywords_batch(
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
+    # 등급 1(세부 롱테일)은 다양한 조합 생성을 위해 temperature를 높임
+    temperature_by_grade = {1: 0.4, 2: 0.3, 3: 0.2, 4: 0.15, 5: 0.1}
+    temperature = temperature_by_grade.get(grade, 0.2)
+
     response = model.generate_content(
         _build_prompt(titles, grade, count),
         generation_config={
             'response_mime_type': 'application/json',
             'response_schema': _KEYWORD_RESPONSE_SCHEMA,
-            'temperature': 0.2,
+            'temperature': temperature,
             'candidate_count': 1,
         },
     )
@@ -133,8 +137,4 @@ def _is_valid_keyword(keyword: str, title: str) -> bool:
 
     tokens = re.findall(r'[가-힣A-Za-z0-9]+', keyword)
     meaningful_tokens = [token for token in tokens if len(token) >= 2]
-    if not meaningful_tokens:
-        return False
-
-    normalized_title = re.sub(r'\s+', '', title).casefold()
-    return all(token.casefold() in normalized_title for token in meaningful_tokens)
+    return len(meaningful_tokens) >= 1
