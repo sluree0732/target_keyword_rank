@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -50,9 +51,8 @@ class RightPanel(QWidget):
 
     def __init__(self):
         super().__init__()
-        self._results = []
         self._analysis_count = 0
-        self._initial_column_widths_applied = False
+        self._tab_results: list = []  # list of list[dict], one per tab
         self._setup_ui()
 
     def _setup_ui(self):
@@ -137,22 +137,44 @@ class RightPanel(QWidget):
         summary_layout.setColumnStretch(4, 1)
         layout.addWidget(self.summary_frame)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(
-            ['블로그', '방문자수', '게시글 제목', '키워드', '순위']
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet(
+            'QTabWidget::pane {'
+            '  border: 1px solid #D8DEE8; border-top: none;'
+            '  background: white;'
+            '}'
+            'QTabBar::tab {'
+            '  background: #EEF2F7; color: #374151;'
+            '  border: 1px solid #D8DEE8; border-bottom: none;'
+            '  padding: 7px 18px; margin-right: 2px;'
+            '  border-top-left-radius: 5px; border-top-right-radius: 5px;'
+            '  font-size: 9pt;'
+            '}'
+            'QTabBar::tab:selected {'
+            '  background: white; color: #1D4F91; font-weight: bold;'
+            '}'
+            'QTabBar::tab:hover:!selected { background: #E2E8F0; }'
         )
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionMode(QTableWidget.SingleSelection)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setAlternatingRowColors(True)
-        self.table.setShowGrid(False)
-        self.table.setWordWrap(False)
-        self.table.setMouseTracking(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(42)
-        self.table.setStyleSheet(
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        layout.addWidget(self.tab_widget, 1)
+
+        self.update_legend(5)
+
+    def _make_tab_table(self) -> QTableWidget:
+        table = QTableWidget(0, 5)
+        table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', '키워드', '순위'])
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.setShowGrid(False)
+        table.setWordWrap(False)
+        table.setMouseTracking(True)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setDefaultSectionSize(42)
+        table.setStyleSheet(
             'QTableWidget {'
-            '  background: white; border: 1px solid #D8DEE8; border-radius: 6px;'
+            '  background: white; border: none;'
             '  gridline-color: transparent; selection-background-color: #DCEBFF;'
             '  selection-color: #111827;'
             '}'
@@ -166,26 +188,23 @@ class RightPanel(QWidget):
             '}'
         )
 
-        header = self.table.horizontalHeader()
+        header = table.horizontalHeader()
         header.setHighlightSections(False)
         header.setDefaultAlignment(Qt.AlignCenter)
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.Interactive)
-        header.setSectionResizeMode(3, QHeaderView.Interactive)
-        header.setSectionResizeMode(4, QHeaderView.Interactive)
-        self._apply_default_column_widths()
-        QTimer.singleShot(0, self._apply_default_column_widths)
-        self.table.cellDoubleClicked.connect(self._open_post_for_row)
+        for col in range(5):
+            header.setSectionResizeMode(col, QHeaderView.Interactive)
 
-        layout.addWidget(self.table, 1)
-        self.update_legend(5)
+        table.cellDoubleClicked.connect(
+            lambda row, col, t=table: self._open_post_for_row(row, col, t)
+        )
+        QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
+        return table
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not self._initial_column_widths_applied:
-            self._apply_default_column_widths()
+        for i in range(self.tab_widget.count()):
+            self._apply_default_column_widths(self.tab_widget.widget(i))
 
     def _make_metric_value(self, color='#111827'):
         label = QLabel('0')
@@ -193,17 +212,17 @@ class RightPanel(QWidget):
         label.setStyleSheet(f'color: {color};')
         return label
 
-    def _apply_default_column_widths(self):
-        width = max(self.table.viewport().width(), self.table.width() - 4)
+    def _apply_default_column_widths(self, table: QTableWidget):
+        width = max(table.viewport().width(), table.width() - 4)
         if width <= 0:
             return
 
         usable = max(width - 2, 0)
         fixed_widths = {
-            0: max(int(usable * 0.07), 110),  # blog id
-            1: max(int(usable * 0.12), 110),  # visitor count
-            3: max(int(usable * 0.15), 210),  # keyword
-            4: max(int(usable * 0.03), 58),   # rank
+            0: max(int(usable * 0.07), 110),
+            1: max(int(usable * 0.12), 110),
+            3: max(int(usable * 0.15), 210),
+            4: max(int(usable * 0.03), 58),
         }
         minimum_title_width = 300
         minimum_total = sum(fixed_widths.values()) + minimum_title_width
@@ -211,8 +230,8 @@ class RightPanel(QWidget):
         if minimum_total > usable and usable > minimum_title_width:
             scale = (usable - minimum_title_width) / sum(fixed_widths.values())
             fixed_widths = {
-                col: max(40, int(width_value * scale))
-                for col, width_value in fixed_widths.items()
+                col: max(40, int(w * scale))
+                for col, w in fixed_widths.items()
             }
 
         side_total = sum(fixed_widths.values())
@@ -221,12 +240,26 @@ class RightPanel(QWidget):
         if overflow > 0:
             title_width = max(80, title_width - overflow)
 
-        self.table.setColumnWidth(0, fixed_widths[0])
-        self.table.setColumnWidth(1, fixed_widths[1])
-        self.table.setColumnWidth(2, title_width)
-        self.table.setColumnWidth(3, fixed_widths[3])
-        self.table.setColumnWidth(4, fixed_widths[4])
-        self._initial_column_widths_applied = True
+        table.setColumnWidth(0, fixed_widths[0])
+        table.setColumnWidth(1, fixed_widths[1])
+        table.setColumnWidth(2, title_width)
+        table.setColumnWidth(3, fixed_widths[3])
+        table.setColumnWidth(4, fixed_widths[4])
+
+    def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
+        self._analysis_count += 1
+        timestamp = datetime.now().strftime('%H:%M')
+        label = f'#{self._analysis_count}  등급{grade}  {timestamp}'
+
+        table = self._make_tab_table()
+        self._tab_results.append([])
+        self.tab_widget.addTab(table, label)
+        self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
+        self.reset_btn.setEnabled(True)
+
+    @property
+    def result_count(self) -> int:
+        return len(self._tab_results[-1]) if self._tab_results else 0
 
     def add_result(
         self,
@@ -237,7 +270,10 @@ class RightPanel(QWidget):
         rank: int,
         post_url: str = '',
     ):
-        self._results.append({
+        if not self._tab_results:
+            return
+
+        self._tab_results[-1].append({
             'blog_url': blog_url,
             'visitor_count': visitor_count,
             'post_title': post_title,
@@ -246,17 +282,22 @@ class RightPanel(QWidget):
             'post_url': post_url,
         })
 
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+        last_idx = self.tab_widget.count() - 1
+        table = self.tab_widget.widget(last_idx)
+        if table is None:
+            return
+
+        row = table.rowCount()
+        table.insertRow(row)
 
         visitor_text = str(visitor_count) if visitor_count > 0 else '-'
         rank_text = f'{rank}위' if rank > 0 else '-'
 
         blog_id = _display_blog_id(blog_url)
-        self.table.setItem(row, 0, self._make_item(blog_id, tooltip=blog_url))
-        self.table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
-        self.table.setItem(row, 2, self._make_item(post_title))
-        self.table.setItem(row, 3, self._make_item(keyword))
+        table.setItem(row, 0, self._make_item(blog_id, tooltip=blog_url))
+        table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
+        table.setItem(row, 2, self._make_item(post_title))
+        table.setItem(row, 3, self._make_item(keyword))
 
         rank_item = self._make_item(rank_text, Qt.AlignCenter)
         if rank > 0:
@@ -264,15 +305,16 @@ class RightPanel(QWidget):
             rank_item.setFont(QFont('', -1, QFont.Bold))
         else:
             rank_item.setForeground(QColor('#B91C1C'))
-        self.table.setItem(row, 4, rank_item)
-        for col in range(self.table.columnCount()):
-            item = self.table.item(row, col)
+        table.setItem(row, 4, rank_item)
+
+        for col in range(table.columnCount()):
+            item = table.item(row, col)
             if item:
                 item.setData(self.POST_URL_ROLE, post_url)
                 item.setData(self.BLOG_URL_ROLE, blog_url)
 
         self._update_summary()
-        self.table.scrollToBottom()
+        table.scrollToBottom()
         self.download_btn.setEnabled(True)
 
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
@@ -281,11 +323,10 @@ class RightPanel(QWidget):
         item.setToolTip(tooltip or text)
         return item
 
-    def _open_post_for_row(self, row: int, _column: int):
-        item = self.table.item(row, 0)
+    def _open_post_for_row(self, row: int, _column: int, table: QTableWidget):
+        item = table.item(row, 0)
         if not item:
             return
-
         post_url = item.data(self.POST_URL_ROLE)
         if post_url:
             QDesktopServices.openUrl(QUrl(post_url))
@@ -296,51 +337,38 @@ class RightPanel(QWidget):
     def update_legend(self, rank_limit: int):
         self.legend_value.setText(f'1~{rank_limit}위')
 
-    def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
-        self._analysis_count += 1
-        timestamp = datetime.now().strftime('%H:%M')
-        header_text = (
-            f'  [분석 {self._analysis_count}]  '
-            f'등급 {grade}  ·  게시글 {post_count}개  ·  키워드 {keyword_count}개  ·  {timestamp}'
-        )
-
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        item = QTableWidgetItem(header_text)
-        item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        item.setBackground(QColor('#374151'))
-        item.setForeground(QColor('#F9FAFB'))
-        item.setFont(QFont('', 10, QFont.Bold))
-        item.setFlags(Qt.ItemIsEnabled)
-        self.table.setItem(row, 0, item)
-        self.table.setSpan(row, 0, 1, 5)
-        self.table.setRowHeight(row, 36)
-
-        self.reset_btn.setEnabled(True)
-
-    @property
-    def result_count(self) -> int:
-        return len(self._results)
-
     def clear_results(self):
-        self.table.setRowCount(0)
-        self._results.clear()
+        self.tab_widget.clear()
+        self._tab_results.clear()
         self._analysis_count = 0
         self.download_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self._update_summary()
 
+    def _on_tab_changed(self, index: int):
+        self._update_summary()
+        has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
+        self.download_btn.setEnabled(has_results)
+
     def _update_summary(self):
-        total = len(self._results)
-        exposed = sum(1 for item in self._results if item['rank'] > 0)
+        idx = self.tab_widget.currentIndex()
+        results = self._tab_results[idx] if 0 <= idx < len(self._tab_results) else []
+
+        total = len(results)
+        exposed = sum(1 for item in results if item['rank'] > 0)
         missing = total - exposed
 
         self.total_value.setText(f'{total}건')
         self.exposed_value.setText(f'{exposed}건')
         self.missing_value.setText(f'{missing}건')
-        self.top_blog_value.setText(_top_rank_blog_label(self._results))
+        self.top_blog_value.setText(_top_rank_blog_label(results))
 
     def _on_download(self):
+        idx = self.tab_widget.currentIndex()
+        if idx < 0 or idx >= len(self._tab_results):
+            return
+        results = self._tab_results[idx]
+
         timestamp = datetime.now().strftime('%y%m%d%H%M')
         default_name = f'키워드분석결과_{timestamp}.xlsx'
         filepath, _ = QFileDialog.getSaveFileName(
@@ -360,8 +388,8 @@ class RightPanel(QWidget):
                 return
 
         try:
-            export_to_excel(self._results, filepath)
-            count = len(self._results)
+            export_to_excel(results, filepath)
+            count = len(results)
             filename = os.path.basename(filepath)
             msg = QMessageBox(self)
             msg.setWindowTitle('저장 완료')
