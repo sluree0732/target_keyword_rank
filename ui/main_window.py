@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         )
 
         self.left_panel.analyze_requested.connect(self._start_analysis)
+        self.left_panel.stop_requested.connect(self._stop_analysis)
         self._center_on_screen()
 
     def _center_on_screen(self):
@@ -73,6 +74,15 @@ class MainWindow(QMainWindow):
         self._analyzer.finished_all.connect(self.right_panel.flush_last_group)
         self._analyzer.finished_all.connect(self._on_finished)
         self._analyzer.start()
+
+    def _stop_analysis(self):
+        if self._analyzer and self._analyzer.isRunning():
+            self._analyzer.cancel()
+            self._analyzer.wait()
+        self.left_panel.set_analyzing(False)
+        self.right_panel.flush_last_group()
+        count = self.right_panel.result_count
+        self.left_panel.update_status(f'분석 중단 — 총 {count}건 수집됨')
 
     def _on_error(self, message: str):
         self._errors.append(message)

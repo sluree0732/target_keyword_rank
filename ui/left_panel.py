@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QHBoxLayout,
@@ -29,6 +29,7 @@ BTN_NORMAL = (
 class LeftPanel(QWidget):
     # blog_ids, post_count, keyword_count, rank_limit, keyword_grade
     analyze_requested = pyqtSignal(object, int, int, int, int)
+    stop_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -40,6 +41,7 @@ class LeftPanel(QWidget):
         self._kw_count_btns = []
         self._kw_grade = 3
         self._kw_grade_btns = []
+        self._is_analyzing = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -121,6 +123,7 @@ class LeftPanel(QWidget):
             'QPushButton:disabled { background-color: #A7B0BA; }'
         )
         self.analyze_btn.clicked.connect(self._on_analyze_clicked)
+        self.analyze_btn.installEventFilter(self)
         layout.addWidget(self.analyze_btn)
 
         # 진행 상태
@@ -215,7 +218,19 @@ class LeftPanel(QWidget):
 
         return outer
 
+    def eventFilter(self, obj, event):
+        if obj is self.analyze_btn and self._is_analyzing:
+            if event.type() == QEvent.Enter:
+                self.analyze_btn.setText('분석 중지')
+            elif event.type() == QEvent.Leave:
+                self.analyze_btn.setText('분석 중')
+        return super().eventFilter(obj, event)
+
     def _on_analyze_clicked(self):
+        if self._is_analyzing:
+            self.stop_requested.emit()
+            return
+
         text = self.url_input.toPlainText().strip()
         blog_ids = [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -240,13 +255,32 @@ class LeftPanel(QWidget):
         )
 
     def set_analyzing(self, analyzing: bool):
-        self.analyze_btn.setEnabled(not analyzing)
+        self._is_analyzing = analyzing
         self.progress_bar.setVisible(analyzing)
         if analyzing:
             self.progress_bar.setRange(0, 0)
+            self.analyze_btn.setText('분석 중')
+            self.analyze_btn.setStyleSheet(
+                'QPushButton {'
+                '  background-color: #6B7280; color: white;'
+                '  border-radius: 6px; border: none;'
+                '}'
+                'QPushButton:hover { background-color: #DC2626; }'
+                'QPushButton:pressed { background-color: #B91C1C; }'
+            )
         else:
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(100)
+            self.analyze_btn.setText('분석 시작')
+            self.analyze_btn.setStyleSheet(
+                'QPushButton {'
+                '  background-color: #1D4F91; color: white;'
+                '  border-radius: 6px; border: none;'
+                '}'
+                'QPushButton:hover { background-color: #2563EB; }'
+                'QPushButton:pressed { background-color: #1E3A8A; }'
+                'QPushButton:disabled { background-color: #A7B0BA; }'
+            )
 
     def update_status(self, message: str):
         self.status_label.setText(message)
