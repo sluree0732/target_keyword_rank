@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QTabBar,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -138,7 +139,7 @@ class RightPanel(QWidget):
         layout.addWidget(self.summary_frame)
 
         self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.setTabsClosable(False)
         self.tab_widget.tabBar().setMovable(True)
         self.tab_widget.setStyleSheet(
             'QTabWidget::pane {'
@@ -156,11 +157,8 @@ class RightPanel(QWidget):
             '  background: white; color: #1D4F91; font-weight: bold;'
             '}'
             'QTabBar::tab:hover:!selected { background: #E2E8F0; }'
-            'QTabBar::close-button { subcontrol-position: right; margin: 2px 2px 2px 0; }'
-            'QTabBar::close-button:hover { background: #FFE4E4; border-radius: 3px; }'
         )
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
-        self.tab_widget.tabCloseRequested.connect(self._close_tab)
         self.tab_widget.tabBar().tabMoved.connect(self._on_tab_moved)
         layout.addWidget(self.tab_widget, 1)
 
@@ -178,6 +176,7 @@ class RightPanel(QWidget):
         table.setMouseTracking(True)
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setDefaultSectionSize(42)
+        table.setProperty('rank_grouped', False)
         table.setStyleSheet(
             'QTableWidget {'
             '  background: white; border: none;'
@@ -192,15 +191,20 @@ class RightPanel(QWidget):
             '  background-color: #1D4F91; color: white; font-weight: bold;'
             '  padding: 9px 10px; border: none; border-right: 1px solid #2B64AD;'
             '}'
+            'QHeaderView::section:hover { background-color: #2563EB; cursor: pointer; }'
         )
 
         header = table.horizontalHeader()
         header.setHighlightSections(False)
         header.setDefaultAlignment(Qt.AlignCenter)
         header.setStretchLastSection(False)
+        header.setCursor(Qt.PointingHandCursor)
         for col in range(5):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
 
+        header.sectionClicked.connect(
+            lambda col, t=table: self._on_rank_header_clicked(col, t)
+        )
         table.cellDoubleClicked.connect(
             lambda row, col, t=table: self._open_post_for_row(row, col, t)
         )
@@ -260,6 +264,22 @@ class RightPanel(QWidget):
         table = self._make_tab_table()
         self._tab_results.append([])
         self.tab_widget.addTab(table, label)
+
+        close_btn = QPushButton('×')
+        close_btn.setFixedSize(18, 18)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFont(QFont('', 11))
+        close_btn.setStyleSheet(
+            'QPushButton { color: #9CA3AF; border: none; background: transparent; padding: 0; }'
+            'QPushButton:hover { color: #EF4444; background: #FFE4E4; border-radius: 3px; }'
+        )
+        close_btn.clicked.connect(lambda _, b=close_btn: self._close_tab_by_button(b))
+        self.tab_widget.tabBar().setTabButton(
+            self.tab_widget.count() - 1,
+            QTabBar.RightSide,
+            close_btn,
+        )
+
         self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
         self.reset_btn.setEnabled(True)
 
@@ -279,32 +299,56 @@ class RightPanel(QWidget):
         if not self._tab_results:
             return
 
-        self._tab_results[-1].append({
+        item = {
             'blog_url': blog_url,
             'visitor_count': visitor_count,
             'post_title': post_title,
             'keyword': keyword,
             'rank': rank,
             'post_url': post_url,
-        })
+        }
+        self._tab_results[-1].append(item)
 
         last_idx = self.tab_widget.count() - 1
         table = self.tab_widget.widget(last_idx)
         if table is None:
             return
 
+        # 필터 활성 중 새 데이터 추가 시 필터 해제
+        if table.property('rank_grouped'):
+            table.setProperty('rank_grouped', False)
+            table.horizontalHeaderItem(4).setText('순위')
+
+        self._insert_row(table, item)
+        self._update_summary()
+        table.scrollToBottom()
+        self.download_btn.setEnabled(True)
+
+    def _insert_row(self, table: QTableWidget, item: dict, show_post_info: bool = True):
+        blog_url = item['blog_url']
+        visitor_count = item['visitor_count']
+        post_title = item['post_title']
+        keyword = item['keyword']
+        rank = item['rank']
+        post_url = item.get('post_url', '')
+
         row = table.rowCount()
         table.insertRow(row)
 
-        visitor_text = str(visitor_count) if visitor_count > 0 else '-'
-        rank_text = f'{rank}위' if rank > 0 else '-'
+        if show_post_info:
+            visitor_text = str(visitor_count) if visitor_count > 0 else '-'
+            table.setItem(row, 0, self._make_item(_display_blog_id(blog_url), tooltip=blog_url))
+            table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
+            table.setItem(row, 2, self._make_item(post_title))
+        else:
+            for col in (0, 1, 2):
+                empty = QTableWidgetItem('')
+                empty.setBackground(QColor('#F0F4F8'))
+                table.setItem(row, col, empty)
 
-        blog_id = _display_blog_id(blog_url)
-        table.setItem(row, 0, self._make_item(blog_id, tooltip=blog_url))
-        table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
-        table.setItem(row, 2, self._make_item(post_title))
         table.setItem(row, 3, self._make_item(keyword))
 
+        rank_text = f'{rank}위' if rank > 0 else '-'
         rank_item = self._make_item(rank_text, Qt.AlignCenter)
         if rank > 0:
             rank_item.setForeground(QColor('#166534'))
@@ -314,14 +358,10 @@ class RightPanel(QWidget):
         table.setItem(row, 4, rank_item)
 
         for col in range(table.columnCount()):
-            item = table.item(row, col)
-            if item:
-                item.setData(self.POST_URL_ROLE, post_url)
-                item.setData(self.BLOG_URL_ROLE, blog_url)
-
-        self._update_summary()
-        table.scrollToBottom()
-        self.download_btn.setEnabled(True)
+            cell = table.item(row, col)
+            if cell:
+                cell.setData(self.POST_URL_ROLE, post_url)
+                cell.setData(self.BLOG_URL_ROLE, blog_url)
 
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
         item = QTableWidgetItem(text)
@@ -337,6 +377,13 @@ class RightPanel(QWidget):
         if post_url:
             QDesktopServices.openUrl(QUrl(post_url))
 
+    def _close_tab_by_button(self, btn: QPushButton):
+        bar = self.tab_widget.tabBar()
+        for i in range(bar.count()):
+            if bar.tabButton(i, QTabBar.RightSide) is btn:
+                self._close_tab(i)
+                return
+
     def _close_tab(self, index: int):
         self._tab_results.pop(index)
         self.tab_widget.removeTab(index)
@@ -348,6 +395,61 @@ class RightPanel(QWidget):
 
     def _on_tab_moved(self, from_idx: int, to_idx: int):
         self._tab_results.insert(to_idx, self._tab_results.pop(from_idx))
+
+    def _on_rank_header_clicked(self, col: int, table: QTableWidget):
+        if col != 4:
+            return
+        idx = self.tab_widget.indexOf(table)
+        if idx < 0 or idx >= len(self._tab_results):
+            return
+
+        active = not (table.property('rank_grouped') or False)
+        table.setProperty('rank_grouped', active)
+        self._refresh_table_view(table, self._tab_results[idx])
+
+    def _get_rank_grouped_rows(self, results: list) -> list:
+        seen_blogs: list = []
+        blog_posts: dict = {}   # blog_url -> [post_key, ...]
+        post_items: dict = {}   # (blog_url, post_title) -> [items]
+
+        for item in results:
+            if item['rank'] <= 0:
+                continue
+            blog = item['blog_url']
+            key = (blog, item['post_title'])
+
+            if blog not in seen_blogs:
+                seen_blogs.append(blog)
+                blog_posts[blog] = []
+
+            if key not in post_items:
+                post_items[key] = []
+                blog_posts[blog].append(key)
+
+            post_items[key].append(item)
+
+        rows = []
+        for blog in seen_blogs:
+            for key in blog_posts.get(blog, []):
+                for i, item in enumerate(sorted(post_items[key], key=lambda x: x['rank'])):
+                    rows.append({**item, '_show_post_info': i == 0})
+
+        return rows
+
+    def _refresh_table_view(self, table: QTableWidget, results: list):
+        active = table.property('rank_grouped') or False
+        header_item = table.horizontalHeaderItem(4)
+        if header_item:
+            header_item.setText('순위 ▲' if active else '순위')
+
+        table.setRowCount(0)
+
+        if active:
+            for row_data in self._get_rank_grouped_rows(results):
+                self._insert_row(table, row_data, row_data.get('_show_post_info', True))
+        else:
+            for item in results:
+                self._insert_row(table, item)
 
     def flush_last_group(self):
         self._update_summary()
