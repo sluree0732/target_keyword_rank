@@ -51,6 +51,7 @@ class RightPanel(QWidget):
     def __init__(self):
         super().__init__()
         self._results = []
+        self._analysis_count = 0
         self._initial_column_widths_applied = False
         self._setup_ui()
 
@@ -67,6 +68,24 @@ class RightPanel(QWidget):
         title.setStyleSheet('color: #111827;')
         header_row.addWidget(title)
         header_row.addStretch()
+
+        self.reset_btn = QPushButton('전체 초기화')
+        self.reset_btn.setMinimumHeight(38)
+        self.reset_btn.setMinimumWidth(110)
+        self.reset_btn.setFont(QFont('', 10))
+        self.reset_btn.setEnabled(False)
+        self.reset_btn.setCursor(Qt.PointingHandCursor)
+        self.reset_btn.setStyleSheet(
+            'QPushButton {'
+            '  background-color: #6B7280; color: white;'
+            '  border-radius: 6px; border: none; padding: 0 16px;'
+            '}'
+            'QPushButton:hover { background-color: #4B5563; }'
+            'QPushButton:pressed { background-color: #374151; }'
+            'QPushButton:disabled { background-color: #D1D5DB; color: #9CA3AF; }'
+        )
+        self.reset_btn.clicked.connect(self.clear_results)
+        header_row.addWidget(self.reset_btn)
 
         self.download_btn = QPushButton('엑셀 다운로드')
         self.download_btn.setMinimumHeight(38)
@@ -277,10 +296,38 @@ class RightPanel(QWidget):
     def update_legend(self, rank_limit: int):
         self.legend_value.setText(f'1~{rank_limit}위')
 
+    def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
+        self._analysis_count += 1
+        timestamp = datetime.now().strftime('%H:%M')
+        header_text = (
+            f'  [분석 {self._analysis_count}]  '
+            f'등급 {grade}  ·  게시글 {post_count}개  ·  키워드 {keyword_count}개  ·  {timestamp}'
+        )
+
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        item = QTableWidgetItem(header_text)
+        item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        item.setBackground(QColor('#374151'))
+        item.setForeground(QColor('#F9FAFB'))
+        item.setFont(QFont('', 10, QFont.Bold))
+        item.setFlags(Qt.ItemIsEnabled)
+        self.table.setItem(row, 0, item)
+        self.table.setSpan(row, 0, 1, 5)
+        self.table.setRowHeight(row, 36)
+
+        self.reset_btn.setEnabled(True)
+
+    @property
+    def result_count(self) -> int:
+        return len(self._results)
+
     def clear_results(self):
         self.table.setRowCount(0)
         self._results.clear()
+        self._analysis_count = 0
         self.download_btn.setEnabled(False)
+        self.reset_btn.setEnabled(False)
         self._update_summary()
 
     def _update_summary(self):

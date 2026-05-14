@@ -60,7 +60,7 @@ class MainWindow(QMainWindow):
             self._analyzer.wait()
 
         self._errors.clear()
-        self.right_panel.clear_results()
+        self.right_panel.start_new_analysis(keyword_grade, post_count, keyword_count, rank_limit)
         self.right_panel.update_legend(rank_limit)
         self.left_panel.set_analyzing(True)
         self.left_panel.update_status('분석 준비 중...')
@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
 
     def _on_finished(self):
         self.left_panel.set_analyzing(False)
-        count = self.right_panel.table.rowCount()
+        count = self.right_panel.result_count
         self.left_panel.update_status(f'분석 완료 — 총 {count}건')
 
         if count == 0 and self._errors:
