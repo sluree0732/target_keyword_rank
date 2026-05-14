@@ -65,7 +65,8 @@ class MainWindow(QMainWindow):
         self.left_panel.set_analyzing(True)
         self.left_panel.update_status('분석 준비 중...')
 
-        self._analyzer = AnalyzerThread(blog_ids, post_count, keyword_count, rank_limit, keyword_grade)
+        internal_grade = 6 - keyword_grade  # UI 1(대표)→내부 5, UI 5(세부)→내부 1
+        self._analyzer = AnalyzerThread(blog_ids, post_count, keyword_count, rank_limit, internal_grade)
         self._analyzer.result_ready.connect(self.right_panel.add_result)
         self._analyzer.status_updated.connect(self.left_panel.update_status)
         self._analyzer.error_occurred.connect(self._on_error)

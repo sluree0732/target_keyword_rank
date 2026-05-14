@@ -138,6 +138,8 @@ class RightPanel(QWidget):
         layout.addWidget(self.summary_frame)
 
         self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabBar().setMovable(True)
         self.tab_widget.setStyleSheet(
             'QTabWidget::pane {'
             '  border: 1px solid #D8DEE8; border-top: none;'
@@ -146,7 +148,7 @@ class RightPanel(QWidget):
             'QTabBar::tab {'
             '  background: #EEF2F7; color: #374151;'
             '  border: 1px solid #D8DEE8; border-bottom: none;'
-            '  padding: 7px 18px; margin-right: 2px;'
+            '  padding: 7px 14px; margin-right: 2px;'
             '  border-top-left-radius: 5px; border-top-right-radius: 5px;'
             '  font-size: 9pt;'
             '}'
@@ -154,8 +156,12 @@ class RightPanel(QWidget):
             '  background: white; color: #1D4F91; font-weight: bold;'
             '}'
             'QTabBar::tab:hover:!selected { background: #E2E8F0; }'
+            'QTabBar::close-button { subcontrol-position: right; margin: 2px 2px 2px 0; }'
+            'QTabBar::close-button:hover { background: #FFE4E4; border-radius: 3px; }'
         )
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        self.tab_widget.tabCloseRequested.connect(self._close_tab)
+        self.tab_widget.tabBar().tabMoved.connect(self._on_tab_moved)
         layout.addWidget(self.tab_widget, 1)
 
         self.update_legend(5)
@@ -330,6 +336,18 @@ class RightPanel(QWidget):
         post_url = item.data(self.POST_URL_ROLE)
         if post_url:
             QDesktopServices.openUrl(QUrl(post_url))
+
+    def _close_tab(self, index: int):
+        self._tab_results.pop(index)
+        self.tab_widget.removeTab(index)
+        if self.tab_widget.count() == 0:
+            self._analysis_count = 0
+            self.download_btn.setEnabled(False)
+            self.reset_btn.setEnabled(False)
+        self._update_summary()
+
+    def _on_tab_moved(self, from_idx: int, to_idx: int):
+        self._tab_results.insert(to_idx, self._tab_results.pop(from_idx))
 
     def flush_last_group(self):
         self._update_summary()

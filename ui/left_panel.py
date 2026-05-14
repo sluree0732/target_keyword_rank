@@ -96,9 +96,9 @@ class LeftPanel(QWidget):
             self._on_kw_count_clicked,
         ))
 
-        # 키워드 등급 (토글 버튼 1~5, 1=세부, 5=대표)
+        # 키워드 등급 (토글 버튼 1~5, 1=대표, 5=세부)
         layout.addLayout(self._make_toggle_row(
-            '키워드 등급  (1=세부  ↔  5=대표)', 1, 5, 3,
+            '키워드 등급  (1=대표  ↔  5=세부)', 1, 5, 3,
             self._kw_grade_btns,
             self._on_kw_grade_clicked,
         ))
