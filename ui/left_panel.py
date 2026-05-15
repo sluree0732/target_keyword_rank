@@ -238,6 +238,18 @@ class LeftPanel(QWidget):
             self.status_label.setText('블로그 ID를 입력해주세요.')
             return
 
+        seen: set = set()
+        unique_ids = []
+        for bid in blog_ids:
+            if bid not in seen:
+                seen.add(bid)
+                unique_ids.append(bid)
+        dup_count = len(blog_ids) - len(unique_ids)
+        if dup_count > 0:
+            self.url_input.setPlainText('\n'.join(unique_ids))
+            self.status_label.setText(f'중복 블로그 {dup_count}개 제거됨')
+            blog_ids = unique_ids
+
         try:
             rank_limit = int(self.rank_limit_input.text().strip())
             if rank_limit < 1:

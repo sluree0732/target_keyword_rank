@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import QTimer, Qt, QUrl
+from PyQt5.QtCore import QEvent, QTimer, Qt, QUrl
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
@@ -38,15 +38,6 @@ def _display_blog_id(blog_url: str) -> str:
     return value
 
 
-def _top_rank_blog_label(results: list) -> str:
-    ranked = [item for item in results if item.get('rank', 0) > 0]
-    if not ranked:
-        return '-'
-
-    best = min(ranked, key=lambda item: item['rank'])
-    return f"{_display_blog_id(best['blog_url'])} ({best['rank']}위)"
-
-
 class RightPanel(QWidget):
     POST_URL_ROLE = Qt.UserRole + 1
     BLOG_URL_ROLE = Qt.UserRole + 2
@@ -55,6 +46,8 @@ class RightPanel(QWidget):
     def __init__(self):
         super().__init__()
         self._tab_results: list = []  # list of list[dict], one per tab
+        self._close_btns: list = []
+        self._col_resizing: bool = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -122,21 +115,18 @@ class RightPanel(QWidget):
         self.exposed_value = self._make_metric_value('#166534')
         self.missing_value = self._make_metric_value('#B91C1C')
         self.legend_value = self._make_metric_value('#374151')
-        self.top_blog_value = self._make_metric_value('#1D4F91')
-
         for col, (label, value) in enumerate([
             ('총 결과', self.total_value),
             ('노출 키워드', self.exposed_value),
             ('순위 밖', self.missing_value),
             ('기준', self.legend_value),
-            ('상위 블로그', self.top_blog_value),
         ]):
             label_widget = QLabel(label)
             label_widget.setStyleSheet('color: #6B7280; font-size: 9pt;')
             summary_layout.addWidget(label_widget, 0, col)
             summary_layout.addWidget(value, 1, col)
 
-        summary_layout.setColumnStretch(4, 1)
+        summary_layout.setColumnStretch(3, 1)
         layout.addWidget(self.summary_frame)
 
         # 행 선택 상세 정보 바 (선택 시에만 표시)
@@ -245,8 +235,10 @@ class RightPanel(QWidget):
         header.setStretchLastSection(False)
         header.setCursor(Qt.PointingHandCursor)
         for col in range(5):
-            mode = QHeaderView.Stretch if col == 2 else QHeaderView.Interactive
-            header.setSectionResizeMode(col, mode)
+            header.setSectionResizeMode(col, QHeaderView.Interactive)
+        header.sectionResized.connect(
+            lambda idx, old, new, t=table: self._on_col_resized(idx, old, new, t)
+        )
 
         table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -280,16 +272,30 @@ class RightPanel(QWidget):
         label.setStyleSheet(f'color: {color};')
         return label
 
+    def _on_col_resized(self, logical_index: int, old_size: int, new_size: int, table: QTableWidget):
+        if self._col_resizing or logical_index == 2:
+            return
+        self._col_resizing = True
+        total = table.viewport().width()
+        used = sum(table.columnWidth(c) for c in range(5) if c != 2)
+        table.setColumnWidth(2, max(total - used, 80))
+        self._col_resizing = False
+
     def _apply_default_column_widths(self, table: QTableWidget):
         width = max(table.viewport().width(), table.width() - 4)
         if width <= 0:
             return
 
         usable = max(width - 2, 0)
-        table.setColumnWidth(0, max(int(usable * 0.08), 90))
-        table.setColumnWidth(1, max(int(usable * 0.09), 80))
-        table.setColumnWidth(3, max(int(usable * 0.20), 160))
-        table.setColumnWidth(4, max(int(usable * 0.05), 76))
+        col0 = max(int(usable * 0.08), 90)
+        col1 = max(int(usable * 0.09), 80)
+        col3 = max(int(usable * 0.20), 160)
+        col4 = max(int(usable * 0.05), 76)
+        table.setColumnWidth(0, col0)
+        table.setColumnWidth(1, col1)
+        table.setColumnWidth(3, col3)
+        table.setColumnWidth(4, col4)
+        table.setColumnWidth(2, max(usable - col0 - col1 - col3 - col4, 80))
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
         label = f'키워드 등급{grade}'
@@ -299,14 +305,16 @@ class RightPanel(QWidget):
         self.tab_widget.addTab(table, label)
 
         close_btn = QPushButton('×')
-        close_btn.setFixedSize(18, 18)
+        close_btn.setFixedSize(20, 20)
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFont(QFont('', 11))
         close_btn.setStyleSheet(
             'QPushButton { color: #9CA3AF; border: none; background: transparent; padding: 0; }'
-            'QPushButton:hover { color: #EF4444; background: #FFE4E4; border-radius: 3px; }'
+            'QPushButton:hover { color: #EF4444; background: #FFE4E4; border-radius: 4px; }'
         )
+        close_btn.installEventFilter(self)
         close_btn.clicked.connect(lambda _, b=close_btn: self._close_tab_by_button(b))
+        self._close_btns.append(close_btn)
         self.tab_widget.tabBar().setTabButton(
             self.tab_widget.count() - 1,
             QTabBar.RightSide,
@@ -419,10 +427,11 @@ class RightPanel(QWidget):
                 return
 
     def _close_tab(self, index: int):
+        btn = self.tab_widget.tabBar().tabButton(index, QTabBar.RightSide)
+        self._close_btns = [b for b in self._close_btns if b is not btn]
         self._tab_results.pop(index)
         self.tab_widget.removeTab(index)
         if self.tab_widget.count() == 0:
-            self._analysis_count = 0
             self.download_btn.setEnabled(False)
             self.reset_btn.setEnabled(False)
         self._update_summary()
@@ -492,6 +501,7 @@ class RightPanel(QWidget):
         self.legend_value.setText(f'1~{rank_limit}위')
 
     def clear_results(self):
+        self._close_btns.clear()
         self.tab_widget.clear()
         self._tab_results.clear()
         self.detail_frame.setVisible(False)
@@ -526,6 +536,16 @@ class RightPanel(QWidget):
         self._detail_rank.setStyleSheet(f'color: {color}; font-weight: bold; font-size: 9pt;')
         self.detail_frame.setVisible(True)
 
+    def eventFilter(self, obj, event):
+        if obj in self._close_btns:
+            if event.type() == QEvent.Enter:
+                obj.setFixedSize(24, 24)
+                obj.setFont(QFont('', 13))
+            elif event.type() == QEvent.Leave:
+                obj.setFixedSize(20, 20)
+                obj.setFont(QFont('', 11))
+        return super().eventFilter(obj, event)
+
     def _on_tab_changed(self, index: int):
         self.detail_frame.setVisible(False)
         self._update_summary()
@@ -543,7 +563,6 @@ class RightPanel(QWidget):
         self.total_value.setText(f'{total}건')
         self.exposed_value.setText(f'{exposed}건')
         self.missing_value.setText(f'{missing}건')
-        self.top_blog_value.setText(_top_rank_blog_label(results))
 
     def _on_download(self):
         idx = self.tab_widget.currentIndex()
