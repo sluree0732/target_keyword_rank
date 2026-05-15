@@ -291,7 +291,7 @@ class RightPanel(QWidget):
         self.tab_widget.addTab(table, label)
 
         close_btn = QPushButton('×')
-        close_btn.setFixedSize(20, 20)
+        close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFont(QFont('', 11))
         close_btn.setStyleSheet(
@@ -523,13 +523,6 @@ class RightPanel(QWidget):
         self.detail_frame.setVisible(True)
 
     def eventFilter(self, obj, event):
-        if obj in self._close_btns:
-            if event.type() == QEvent.Enter:
-                obj.setFixedSize(24, 24)
-                obj.setFont(QFont('', 13))
-            elif event.type() == QEvent.Leave:
-                obj.setFixedSize(20, 20)
-                obj.setFont(QFont('', 11))
         return super().eventFilter(obj, event)
 
     def _on_tab_changed(self, index: int):
