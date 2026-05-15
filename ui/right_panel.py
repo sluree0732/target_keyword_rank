@@ -47,7 +47,6 @@ class RightPanel(QWidget):
         super().__init__()
         self._tab_results: list = []  # list of list[dict], one per tab
         self._close_btns: list = []
-        self._col_resizing: bool = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -232,13 +231,10 @@ class RightPanel(QWidget):
         header = table.horizontalHeader()
         header.setHighlightSections(False)
         header.setDefaultAlignment(Qt.AlignCenter)
-        header.setStretchLastSection(False)
+        header.setStretchLastSection(True)
         header.setCursor(Qt.PointingHandCursor)
-        for col in range(5):
+        for col in range(4):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
-        header.sectionResized.connect(
-            lambda idx, old, new, t=table: self._on_col_resized(idx, old, new, t)
-        )
 
         table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -272,15 +268,6 @@ class RightPanel(QWidget):
         label.setStyleSheet(f'color: {color};')
         return label
 
-    def _on_col_resized(self, logical_index: int, old_size: int, new_size: int, table: QTableWidget):
-        if self._col_resizing or logical_index == 2:
-            return
-        self._col_resizing = True
-        total = table.viewport().width()
-        used = sum(table.columnWidth(c) for c in range(5) if c != 2)
-        table.setColumnWidth(2, max(total - used, 80))
-        self._col_resizing = False
-
     def _apply_default_column_widths(self, table: QTableWidget):
         width = max(table.viewport().width(), table.width() - 4)
         if width <= 0:
@@ -290,12 +277,11 @@ class RightPanel(QWidget):
         col0 = max(int(usable * 0.08), 90)
         col1 = max(int(usable * 0.09), 80)
         col3 = max(int(usable * 0.20), 160)
-        col4 = max(int(usable * 0.05), 76)
+        col2 = max(usable - col0 - col1 - col3 - 76, 80)
         table.setColumnWidth(0, col0)
         table.setColumnWidth(1, col1)
+        table.setColumnWidth(2, col2)
         table.setColumnWidth(3, col3)
-        table.setColumnWidth(4, col4)
-        table.setColumnWidth(2, max(usable - col0 - col1 - col3 - col4, 80))
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
         label = f'키워드 등급{grade}'

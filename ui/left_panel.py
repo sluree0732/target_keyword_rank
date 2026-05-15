@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QTextEdit,
@@ -246,8 +247,16 @@ class LeftPanel(QWidget):
                 unique_ids.append(bid)
         dup_count = len(blog_ids) - len(unique_ids)
         if dup_count > 0:
+            reply = QMessageBox.question(
+                self,
+                '중복 블로그 ID 발견',
+                f'중복된 블로그 ID {dup_count}개가 발견되었습니다.\n제거 후 분석을 시작할까요?',
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Ok,
+            )
+            if reply != QMessageBox.Ok:
+                return
             self.url_input.setPlainText('\n'.join(unique_ids))
-            self.status_label.setText(f'중복 블로그 {dup_count}개 제거됨')
             blog_ids = unique_ids
 
         try:
