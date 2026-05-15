@@ -274,10 +274,11 @@ class RightPanel(QWidget):
             return
 
         usable = max(width - 2, 0)
-        col0 = max(int(usable * 0.08), 90)
-        col1 = max(int(usable * 0.09), 80)
-        col3 = max(int(usable * 0.20), 160)
-        col2 = max(usable - col0 - col1 - col3 - 76, 80)
+        col0 = max(int(usable * 0.09), 80)
+        col1 = max(int(usable * 0.08), 72)
+        col3 = max(int(usable * 0.19), 140)
+        col4_reserved = max(int(usable * 0.08), 65)
+        col2 = max(usable - col0 - col1 - col3 - col4_reserved, 80)
         table.setColumnWidth(0, col0)
         table.setColumnWidth(1, col1)
         table.setColumnWidth(2, col2)
