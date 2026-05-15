@@ -5,6 +5,7 @@ from PyQt5.QtCore import QTimer, Qt, QUrl
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -244,7 +245,11 @@ class RightPanel(QWidget):
         header.setStretchLastSection(False)
         header.setCursor(Qt.PointingHandCursor)
         for col in range(5):
-            header.setSectionResizeMode(col, QHeaderView.Interactive)
+            mode = QHeaderView.Stretch if col == 2 else QHeaderView.Interactive
+            header.setSectionResizeMode(col, mode)
+
+        table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
         header.sectionClicked.connect(
             lambda col, t=table: self._on_rank_header_clicked(col, t)
@@ -281,33 +286,10 @@ class RightPanel(QWidget):
             return
 
         usable = max(width - 2, 0)
-        fixed_widths = {
-            0: max(int(usable * 0.07), 110),
-            1: max(int(usable * 0.12), 110),
-            3: max(int(usable * 0.15), 210),
-            4: max(int(usable * 0.04), 76),
-        }
-        minimum_title_width = 300
-        minimum_total = sum(fixed_widths.values()) + minimum_title_width
-
-        if minimum_total > usable and usable > minimum_title_width:
-            scale = (usable - minimum_title_width) / sum(fixed_widths.values())
-            fixed_widths = {
-                col: max(40, int(w * scale))
-                for col, w in fixed_widths.items()
-            }
-
-        side_total = sum(fixed_widths.values())
-        title_width = max(usable - side_total, minimum_title_width if usable >= minimum_total else 120)
-        overflow = side_total + title_width - usable
-        if overflow > 0:
-            title_width = max(80, title_width - overflow)
-
-        table.setColumnWidth(0, fixed_widths[0])
-        table.setColumnWidth(1, fixed_widths[1])
-        table.setColumnWidth(2, title_width)
-        table.setColumnWidth(3, fixed_widths[3])
-        table.setColumnWidth(4, fixed_widths[4])
+        table.setColumnWidth(0, max(int(usable * 0.08), 90))
+        table.setColumnWidth(1, max(int(usable * 0.09), 80))
+        table.setColumnWidth(3, max(int(usable * 0.20), 160))
+        table.setColumnWidth(4, max(int(usable * 0.05), 76))
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
         label = f'키워드 등급{grade}'
