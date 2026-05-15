@@ -49,10 +49,10 @@ def _top_rank_blog_label(results: list) -> str:
 class RightPanel(QWidget):
     POST_URL_ROLE = Qt.UserRole + 1
     BLOG_URL_ROLE = Qt.UserRole + 2
+    ITEM_DATA_ROLE = Qt.UserRole + 3
 
     def __init__(self):
         super().__init__()
-        self._analysis_count = 0
         self._tab_results: list = []  # list of list[dict], one per tab
         self._setup_ui()
 
@@ -138,6 +138,50 @@ class RightPanel(QWidget):
         summary_layout.setColumnStretch(4, 1)
         layout.addWidget(self.summary_frame)
 
+        # 행 선택 상세 정보 바 (선택 시에만 표시)
+        self.detail_frame = QFrame()
+        self.detail_frame.setVisible(False)
+        self.detail_frame.setStyleSheet(
+            'QFrame { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; }'
+            'QLabel { border: none; background: transparent; }'
+        )
+        detail_layout = QHBoxLayout(self.detail_frame)
+        detail_layout.setContentsMargins(14, 8, 14, 8)
+        detail_layout.setSpacing(6)
+
+        sel_label = QLabel('선택')
+        sel_label.setStyleSheet('color: #1D4F91; font-weight: bold; font-size: 9pt;')
+        detail_layout.addWidget(sel_label)
+
+        sep = QLabel('|')
+        sep.setStyleSheet('color: #CBD5E1; font-size: 9pt;')
+        detail_layout.addWidget(sep)
+
+        self._detail_blog = self._make_detail_value()
+        self._detail_visitor = self._make_detail_value('#6B7280')
+        self._detail_title = self._make_detail_value()
+        self._detail_keyword = self._make_detail_value('#1D4F91')
+        self._detail_rank = self._make_detail_value('#166534')
+
+        for lbl_text, val_widget in [
+            ('블로그', self._detail_blog),
+            ('방문자수', self._detail_visitor),
+            ('게시글', self._detail_title),
+            ('키워드', self._detail_keyword),
+            ('순위', self._detail_rank),
+        ]:
+            lbl = QLabel(f'{lbl_text}:')
+            lbl.setStyleSheet('color: #6B7280; font-size: 9pt;')
+            detail_layout.addWidget(lbl)
+            detail_layout.addWidget(val_widget)
+            if lbl_text != '순위':
+                sp = QLabel('|')
+                sp.setStyleSheet('color: #CBD5E1; font-size: 9pt;')
+                detail_layout.addWidget(sp)
+
+        detail_layout.addStretch()
+        layout.addWidget(self.detail_frame)
+
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(False)
         self.tab_widget.tabBar().setMovable(True)
@@ -208,6 +252,9 @@ class RightPanel(QWidget):
         table.cellDoubleClicked.connect(
             lambda row, col, t=table: self._open_post_for_row(row, col, t)
         )
+        table.itemSelectionChanged.connect(
+            lambda t=table: self._on_row_selected(t)
+        )
         QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
         return table
 
@@ -215,6 +262,12 @@ class RightPanel(QWidget):
         super().resizeEvent(event)
         for i in range(self.tab_widget.count()):
             self._apply_default_column_widths(self.tab_widget.widget(i))
+
+    def _make_detail_value(self, color='#111827'):
+        label = QLabel('')
+        label.setFont(QFont('', 9, QFont.Bold))
+        label.setStyleSheet(f'color: {color};')
+        return label
 
     def _make_metric_value(self, color='#111827'):
         label = QLabel('0')
@@ -232,7 +285,7 @@ class RightPanel(QWidget):
             0: max(int(usable * 0.07), 110),
             1: max(int(usable * 0.12), 110),
             3: max(int(usable * 0.15), 210),
-            4: max(int(usable * 0.03), 58),
+            4: max(int(usable * 0.04), 76),
         }
         minimum_title_width = 300
         minimum_total = sum(fixed_widths.values()) + minimum_title_width
@@ -257,9 +310,7 @@ class RightPanel(QWidget):
         table.setColumnWidth(4, fixed_widths[4])
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
-        self._analysis_count += 1
-        timestamp = datetime.now().strftime('%H:%M')
-        label = f'#{self._analysis_count}  등급{grade}  {timestamp}'
+        label = f'키워드 등급{grade}'
 
         table = self._make_tab_table()
         self._tab_results.append([])
@@ -362,6 +413,7 @@ class RightPanel(QWidget):
             if cell:
                 cell.setData(self.POST_URL_ROLE, post_url)
                 cell.setData(self.BLOG_URL_ROLE, blog_url)
+                cell.setData(self.ITEM_DATA_ROLE, item)
 
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
         item = QTableWidgetItem(text)
@@ -440,7 +492,7 @@ class RightPanel(QWidget):
         active = table.property('rank_grouped') or False
         header_item = table.horizontalHeaderItem(4)
         if header_item:
-            header_item.setText('순위 ▲' if active else '순위')
+            header_item.setText('순위 ↑' if active else '순위')
 
         table.setRowCount(0)
 
@@ -460,12 +512,40 @@ class RightPanel(QWidget):
     def clear_results(self):
         self.tab_widget.clear()
         self._tab_results.clear()
-        self._analysis_count = 0
+        self.detail_frame.setVisible(False)
         self.download_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self._update_summary()
 
+    def _on_row_selected(self, table: QTableWidget):
+        row = table.currentRow()
+        if row < 0:
+            self.detail_frame.setVisible(False)
+            return
+
+        cell = table.item(row, 0)
+        if not cell:
+            self.detail_frame.setVisible(False)
+            return
+
+        item = cell.data(self.ITEM_DATA_ROLE)
+        if not item:
+            self.detail_frame.setVisible(False)
+            return
+
+        self._detail_blog.setText(_display_blog_id(item['blog_url']))
+        visitor = str(item['visitor_count']) if item['visitor_count'] > 0 else '-'
+        self._detail_visitor.setText(visitor)
+        self._detail_title.setText(item['post_title'])
+        self._detail_keyword.setText(item['keyword'])
+        rank = f"{item['rank']}위" if item['rank'] > 0 else '-'
+        self._detail_rank.setText(rank)
+        color = '#166534' if item['rank'] > 0 else '#B91C1C'
+        self._detail_rank.setStyleSheet(f'color: {color}; font-weight: bold; font-size: 9pt;')
+        self.detail_frame.setVisible(True)
+
     def _on_tab_changed(self, index: int):
+        self.detail_frame.setVisible(False)
         self._update_summary()
         has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
         self.download_btn.setEnabled(has_results)

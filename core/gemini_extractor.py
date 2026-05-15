@@ -82,7 +82,7 @@ def _build_prompt(titles: list, grade: int, count: int) -> str:
     inference_rule = (
         '- 제목에 있는 단어들을 최대한 조합해 구체적인 검색어를 만들어.'
         if grade <= 2 else
-        '- 제목에 없는 지역명, 브랜드명, 업종은 추론해서 추가하지 마.'
+        '- 제목에 없는 단어는 추가하지 마. 단, 탐색 의도어(맛집·카페·이용·구매처 등)는 예외.'
     )
 
     return (
