@@ -66,6 +66,24 @@ class LeftPanel(QWidget):
         id_hint = QLabel('한 줄에 하나씩 입력하세요')
         id_hint.setStyleSheet('color: #757575; font-size: 9pt;')
 
+        add_list_btn = QPushButton('추가하기')
+        add_list_btn.setFixedHeight(26)
+        add_list_btn.setCursor(Qt.PointingHandCursor)
+        add_list_btn.setStyleSheet(BTN_NORMAL)
+        add_list_btn.clicked.connect(self._on_add_list_clicked)
+
+        load_list_btn = QPushButton('불러오기')
+        load_list_btn.setFixedHeight(26)
+        load_list_btn.setCursor(Qt.PointingHandCursor)
+        load_list_btn.setStyleSheet(BTN_NORMAL)
+        load_list_btn.clicked.connect(self._on_load_list_clicked)
+
+        id_header = QHBoxLayout()
+        id_header.addWidget(id_label)
+        id_header.addStretch()
+        id_header.addWidget(add_list_btn)
+        id_header.addWidget(load_list_btn)
+
         self.url_input = QTextEdit()
         self.url_input.setPlaceholderText(
             'blog_id1\n'
@@ -81,7 +99,7 @@ class LeftPanel(QWidget):
             'QTextEdit:focus { border-color: #2563EB; }'
         )
 
-        layout.addWidget(id_label)
+        layout.addLayout(id_header)
         layout.addWidget(id_hint)
         layout.addWidget(self.url_input)
 
@@ -302,6 +320,16 @@ class LeftPanel(QWidget):
                 'QPushButton:pressed { background-color: #1E3A8A; }'
                 'QPushButton:disabled { background-color: #A7B0BA; }'
             )
+
+    def _on_add_list_clicked(self):
+        from ui.blog_list_dialogs import AddEditDialog
+        AddEditDialog(self).exec_()
+
+    def _on_load_list_clicked(self):
+        from ui.blog_list_dialogs import LoadDialog
+        dlg = LoadDialog(self)
+        if dlg.exec_() == LoadDialog.Accepted and dlg.selected_ids:
+            self.url_input.setPlainText('\n'.join(dlg.selected_ids))
 
     def update_status(self, message: str):
         self.status_label.setText(message)
