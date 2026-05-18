@@ -204,7 +204,7 @@ class RightPanel(QWidget):
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setAlternatingRowColors(True)
+        table.setAlternatingRowColors(False)
         table.setShowGrid(False)
         table.setWordWrap(False)
         table.setMouseTracking(True)
@@ -212,7 +212,6 @@ class RightPanel(QWidget):
         table.verticalHeader().setDefaultSectionSize(42)
         table.setProperty('rank_mode', 0)
         table.setProperty('_cur_blog', '')
-        table.setProperty('_cur_blog_start', -1)
         table.setStyleSheet(
             'QTableWidget {'
             '  background: white; border: none;'
@@ -221,8 +220,6 @@ class RightPanel(QWidget):
             '}'
             'QTableWidget::item { padding: 8px 10px; border-bottom: 1px solid #EEF2F7; }'
             'QTableWidget::item:selected { color: #111827; background: #DCEBFF; }'
-            'QTableWidget::item:alternate { background-color: #F9FAFB; }'
-            'QTableWidget::item:alternate:selected { color: #111827; background: #DCEBFF; }'
             'QHeaderView::section {'
             '  background-color: #1D4F91; color: white; font-weight: bold;'
             '  padding: 9px 10px; border: none; border-right: 1px solid #2B64AD;'
@@ -394,28 +391,30 @@ class RightPanel(QWidget):
                 cell.setData(self.BLOG_URL_ROLE, blog_url)
                 cell.setData(self.ITEM_DATA_ROLE, item)
 
+        alt_bg = QColor('#F9FAFB') if row % 2 else QColor('#FFFFFF')
+
         if show_post_info:
             cur_blog = table.property('_cur_blog') or ''
-            cur_start = table.property('_cur_blog_start')
-            if cur_start is None:
-                cur_start = -1
-            if blog_url == cur_blog and cur_start >= 0:
-                span = row - cur_start + 1
-                table.setSpan(cur_start, 0, span, 1)
-                table.setSpan(cur_start, 1, span, 1)
-                for col in (0, 1):
-                    cell = table.item(row, col)
-                    if cell:
-                        cell.setText('')
-            else:
+            is_same_blog = blog_url == cur_blog
+            if not is_same_blog:
                 table.setProperty('_cur_blog', blog_url)
-                table.setProperty('_cur_blog_start', row)
-                cell0 = table.item(row, 0)
-                if cell0:
-                    cell0.setTextAlignment(Qt.AlignCenter)
+            group_bg = QColor('#EFF6FF')
+            for col in (0, 1):
+                cell = table.item(row, col)
+                if cell:
+                    cell.setBackground(group_bg)
+                    if is_same_blog:
+                        cell.setText('')
+            for col in (2, 3, 4):
+                cell = table.item(row, col)
+                if cell:
+                    cell.setBackground(alt_bg)
         else:
             table.setProperty('_cur_blog', '')
-            table.setProperty('_cur_blog_start', -1)
+            for col in (3, 4):
+                cell = table.item(row, col)
+                if cell:
+                    cell.setBackground(alt_bg)
 
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
         item = QTableWidgetItem(text)
@@ -520,7 +519,6 @@ class RightPanel(QWidget):
             header_item.setText(header_texts[mode])
 
         table.setProperty('_cur_blog', '')
-        table.setProperty('_cur_blog_start', -1)
         table.setRowCount(0)
 
         if mode == 1:
