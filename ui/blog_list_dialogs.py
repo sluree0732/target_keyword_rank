@@ -64,7 +64,7 @@ class AddEditDialog(QDialog):
 
         layout.addWidget(QLabel('블로그 ID (한 줄에 하나씩)'))
         self.ids_input = QTextEdit()
-        self.ids_input.setPlaceholderText('tempestseo\nnahyun7000\nji-rong1026')
+        self.ids_input.setPlaceholderText('blog_id1\nblog_id2\nblog_id3')
         self.ids_input.setStyleSheet(
             'QTextEdit { border: 1px solid #CBD5E1; border-radius: 5px; padding: 6px; }'
             'QTextEdit:focus { border-color: #2563EB; }'
