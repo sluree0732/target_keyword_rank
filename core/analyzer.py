@@ -91,8 +91,8 @@ class AnalyzerThread(QThread):
 
             # 두 번째 블로그부터 5초 딜레이 (Gemini RPM 여유)
             if idx > 0:
-                self.status_updated.emit('다음 블로그 처리 대기 중... (5초)')
-                for _ in range(5):
+                for remaining in range(5, 0, -1):
+                    self.status_updated.emit(f'다음 블로그 처리 대기 중... ({remaining}초)')
                     if self._cancelled:
                         break
                     time.sleep(1)
