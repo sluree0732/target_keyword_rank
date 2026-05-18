@@ -103,10 +103,14 @@ class AddEditDialog(QDialog):
             QMessageBox.warning(self, '입력 오류', '블로그 ID를 입력해주세요.')
             return
 
-        if self._original_name and self._original_name != name:
-            blog_list_store.delete(self._original_name)
+        try:
+            if self._original_name and self._original_name != name:
+                blog_list_store.delete(self._original_name)
+            blog_list_store.save(name, ids)
+        except Exception as e:
+            QMessageBox.critical(self, '저장 실패', f'서버 저장 중 오류가 발생했습니다.\n{e}')
+            return
 
-        blog_list_store.save(name, ids)
         self.accept()
 
 
@@ -146,7 +150,14 @@ class LoadDialog(QDialog):
 
     def _refresh(self):
         self.list_widget.clear()
-        lists = blog_list_store.get_all()
+        try:
+            lists = blog_list_store.get_all()
+        except Exception as e:
+            item = QListWidgetItem(f'목록 불러오기 실패: {e}')
+            item.setFlags(Qt.NoItemFlags)
+            item.setForeground(Qt.red)
+            self.list_widget.addItem(item)
+            return
 
         if not lists:
             item = QListWidgetItem('저장된 목록이 없습니다.')
@@ -213,5 +224,9 @@ class LoadDialog(QDialog):
             QMessageBox.Cancel,
         )
         if reply == QMessageBox.Ok:
-            blog_list_store.delete(name)
+            try:
+                blog_list_store.delete(name)
+            except Exception as e:
+                QMessageBox.critical(self, '삭제 실패', f'서버 삭제 중 오류가 발생했습니다.\n{e}')
+                return
             self._refresh()
