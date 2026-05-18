@@ -211,6 +211,8 @@ class RightPanel(QWidget):
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setDefaultSectionSize(42)
         table.setProperty('rank_mode', 0)
+        table.setProperty('_cur_blog', '')
+        table.setProperty('_cur_blog_start', -1)
         table.setStyleSheet(
             'QTableWidget {'
             '  background: white; border: none;'
@@ -392,6 +394,29 @@ class RightPanel(QWidget):
                 cell.setData(self.BLOG_URL_ROLE, blog_url)
                 cell.setData(self.ITEM_DATA_ROLE, item)
 
+        if show_post_info:
+            cur_blog = table.property('_cur_blog') or ''
+            cur_start = table.property('_cur_blog_start')
+            if cur_start is None:
+                cur_start = -1
+            if blog_url == cur_blog and cur_start >= 0:
+                span = row - cur_start + 1
+                table.setSpan(cur_start, 0, span, 1)
+                table.setSpan(cur_start, 1, span, 1)
+                for col in (0, 1):
+                    cell = table.item(row, col)
+                    if cell:
+                        cell.setText('')
+            else:
+                table.setProperty('_cur_blog', blog_url)
+                table.setProperty('_cur_blog_start', row)
+                cell0 = table.item(row, 0)
+                if cell0:
+                    cell0.setTextAlignment(Qt.AlignCenter)
+        else:
+            table.setProperty('_cur_blog', '')
+            table.setProperty('_cur_blog_start', -1)
+
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
         item = QTableWidgetItem(text)
         item.setTextAlignment(align)
@@ -491,9 +516,11 @@ class RightPanel(QWidget):
         mode = table.property('rank_mode') or 0
         header_item = table.horizontalHeaderItem(4)
         if header_item:
-            header_texts = ['순위', '순위 ▲▽', '순위 ↑']
+            header_texts = ['순위', '순위 ↑', '순위만']
             header_item.setText(header_texts[mode])
 
+        table.setProperty('_cur_blog', '')
+        table.setProperty('_cur_blog_start', -1)
         table.setRowCount(0)
 
         if mode == 1:
