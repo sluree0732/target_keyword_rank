@@ -210,7 +210,7 @@ class RightPanel(QWidget):
         table.setMouseTracking(True)
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setDefaultSectionSize(42)
-        table.setProperty('rank_grouped', False)
+        table.setProperty('rank_mode', 0)
         table.setStyleSheet(
             'QTableWidget {'
             '  background: white; border: none;'
@@ -343,8 +343,8 @@ class RightPanel(QWidget):
             return
 
         # 필터 활성 중 새 데이터 추가 시 필터 해제
-        if table.property('rank_grouped'):
-            table.setProperty('rank_grouped', False)
+        if (table.property('rank_mode') or 0) != 0:
+            table.setProperty('rank_mode', 0)
             table.horizontalHeaderItem(4).setText('순위')
 
         self._insert_row(table, item)
@@ -433,8 +433,8 @@ class RightPanel(QWidget):
         if idx < 0 or idx >= len(self._tab_results):
             return
 
-        active = not (table.property('rank_grouped') or False)
-        table.setProperty('rank_grouped', active)
+        current = table.property('rank_mode') or 0
+        table.setProperty('rank_mode', (current + 1) % 3)
         self._refresh_table_view(table, self._tab_results[idx])
 
     def _get_rank_grouped_rows(self, results: list) -> list:
@@ -466,15 +466,40 @@ class RightPanel(QWidget):
 
         return rows
 
+    def _get_rank_sorted_rows(self, results: list) -> list:
+        seen_blogs: list = []
+        blog_items: dict = {}
+
+        for item in results:
+            blog = item['blog_url']
+            if blog not in seen_blogs:
+                seen_blogs.append(blog)
+                blog_items[blog] = {'ranked': [], 'unranked': []}
+            if item['rank'] > 0:
+                blog_items[blog]['ranked'].append(item)
+            else:
+                blog_items[blog]['unranked'].append(item)
+
+        rows = []
+        for blog in seen_blogs:
+            ranked = sorted(blog_items[blog]['ranked'], key=lambda x: x['rank'])
+            rows.extend(ranked)
+            rows.extend(blog_items[blog]['unranked'])
+        return rows
+
     def _refresh_table_view(self, table: QTableWidget, results: list):
-        active = table.property('rank_grouped') or False
+        mode = table.property('rank_mode') or 0
         header_item = table.horizontalHeaderItem(4)
         if header_item:
-            header_item.setText('순위 ↑' if active else '순위')
+            header_texts = ['순위', '순위 ▲▽', '순위 ↑']
+            header_item.setText(header_texts[mode])
 
         table.setRowCount(0)
 
-        if active:
+        if mode == 1:
+            for item in self._get_rank_sorted_rows(results):
+                self._insert_row(table, item)
+        elif mode == 2:
             for row_data in self._get_rank_grouped_rows(results):
                 self._insert_row(table, row_data, row_data.get('_show_post_info', True))
         else:
