@@ -19,6 +19,11 @@ class MainWindow(QMainWindow):
         self._analyzer = None
         self._errors = []
         self._analysis_start: float = 0.0
+        self._pending_grades: list = []
+        self._analysis_blog_ids: list = []
+        self._analysis_post_count: int = 5
+        self._analysis_kw_count: int = 3
+        self._analysis_rank_limit: int = 5
 
         splitter = QSplitter(Qt.Horizontal)
         self.left_panel = LeftPanel()
@@ -61,7 +66,7 @@ class MainWindow(QMainWindow):
         post_count: int,
         keyword_count: int,
         rank_limit: int,
-        keyword_grade: int,
+        keyword_grades: list,
     ):
         if self._analyzer and self._analyzer.isRunning():
             self._analyzer.cancel()
@@ -69,22 +74,42 @@ class MainWindow(QMainWindow):
 
         self._errors.clear()
         self._analysis_start = time.time()
-        self.right_panel.start_new_analysis(keyword_grade, post_count, keyword_count, rank_limit)
-        self.right_panel.update_legend(rank_limit)
+        self._pending_grades = list(keyword_grades)
+        self._analysis_blog_ids = blog_ids
+        self._analysis_post_count = post_count
+        self._analysis_kw_count = keyword_count
+        self._analysis_rank_limit = rank_limit
+        self._start_next_grade()
+
+    def _start_next_grade(self):
+        grade = self._pending_grades.pop(0)
+        self.right_panel.start_new_analysis(grade, self._analysis_post_count, self._analysis_kw_count, self._analysis_rank_limit)
+        self.right_panel.update_legend(self._analysis_rank_limit)
         self.left_panel.set_analyzing(True)
         self.left_panel.update_status('분석 준비 중...')
 
-        internal_grade = 6 - keyword_grade  # UI 1(대표)→내부 5, UI 5(세부)→내부 1
-        self._analyzer = AnalyzerThread(blog_ids, post_count, keyword_count, rank_limit, internal_grade)
+        internal_grade = 6 - grade
+        self._analyzer = AnalyzerThread(
+            self._analysis_blog_ids,
+            self._analysis_post_count,
+            self._analysis_kw_count,
+            self._analysis_rank_limit,
+            internal_grade,
+        )
         self._analyzer.result_ready.connect(self.right_panel.add_result)
         self._analyzer.status_updated.connect(self.left_panel.update_status)
         self._analyzer.error_occurred.connect(self._on_error)
         self._analyzer.finished_all.connect(self.right_panel.flush_last_group)
-        self._analyzer.finished_all.connect(self._on_finished)
+        self._analyzer.finished_all.connect(self._on_grade_finished)
         self._analyzer.start()
 
     def _stop_analysis(self):
+        self._pending_grades.clear()
         if self._analyzer and self._analyzer.isRunning():
+            try:
+                self._analyzer.finished_all.disconnect(self._on_grade_finished)
+            except TypeError:
+                pass
             self._analyzer.cancel()
             self._analyzer.wait()
         self.left_panel.set_analyzing(False)
@@ -96,7 +121,15 @@ class MainWindow(QMainWindow):
         self._errors.append(message)
         self.left_panel.update_status(f'⚠ {message}')
 
-    def _on_finished(self):
+    def _on_grade_finished(self):
+        if self._pending_grades:
+            next_grade = self._pending_grades[0]
+            self.left_panel.update_status(f'다음 등급({next_grade}등급) 분석 시작 중...')
+            self._start_next_grade()
+        else:
+            self._on_all_finished()
+
+    def _on_all_finished(self):
         self.left_panel.set_analyzing(False)
         count = self.right_panel.result_count
         self.left_panel.update_status(f'분석 완료 — 총 {count}건')

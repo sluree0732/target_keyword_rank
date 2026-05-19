@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -28,8 +29,8 @@ BTN_NORMAL = (
 
 
 class LeftPanel(QWidget):
-    # blog_ids, post_count, keyword_count, rank_limit, keyword_grade
-    analyze_requested = pyqtSignal(object, int, int, int, int)
+    # blog_ids, post_count, keyword_count, rank_limit, keyword_grades (list)
+    analyze_requested = pyqtSignal(object, int, int, int, object)
     stop_requested = pyqtSignal()
 
     def __init__(self):
@@ -40,8 +41,8 @@ class LeftPanel(QWidget):
         self._post_count_btns = []
         self._kw_count = 3
         self._kw_count_btns = []
-        self._kw_grade = 3
-        self._kw_grade_btns = []
+        self._kw_grades = [3]
+        self._kw_grade_checks = []
         self._is_analyzing = False
         self._setup_ui()
 
@@ -117,12 +118,8 @@ class LeftPanel(QWidget):
             self._on_kw_count_clicked,
         ))
 
-        # 키워드 등급 (토글 버튼 1~5, 1=대표, 5=세부)
-        layout.addLayout(self._make_toggle_row(
-            '키워드 등급  (1=대표  ↔  5=세부)', 1, 5, 3,
-            self._kw_grade_btns,
-            self._on_kw_grade_clicked,
-        ))
+        # 키워드 등급 (체크박스 1~5, 복수 선택 가능)
+        layout.addLayout(self._make_grade_checkboxes())
 
         # 순위 탐색 범위 (텍스트 입력)
         layout.addLayout(self._make_rank_limit_row())
@@ -209,9 +206,35 @@ class LeftPanel(QWidget):
         self._kw_count = value
         self._refresh_toggle_style(self._kw_count_btns, value)
 
-    def _on_kw_grade_clicked(self, value: int):
-        self._kw_grade = value
-        self._refresh_toggle_style(self._kw_grade_btns, value)
+    def _make_grade_checkboxes(self) -> QVBoxLayout:
+        outer = QVBoxLayout()
+        outer.setSpacing(6)
+        outer.addWidget(QLabel('키워드 등급  (1=대표  ↔  5=세부)'))
+
+        check_row = QHBoxLayout()
+        check_row.setSpacing(16)
+
+        for n in range(1, 6):
+            cb = QCheckBox(str(n))
+            cb.setChecked(n in self._kw_grades)
+            cb.setFont(QFont('', 11, QFont.Bold))
+            cb.setCursor(Qt.PointingHandCursor)
+            cb.setStyleSheet('QCheckBox { spacing: 6px; }')
+            cb.stateChanged.connect(lambda state, val=n: self._on_grade_check_changed(val, state))
+            self._kw_grade_checks.append(cb)
+            check_row.addWidget(cb)
+
+        check_row.addStretch()
+        outer.addLayout(check_row)
+        return outer
+
+    def _on_grade_check_changed(self, grade: int, state: int):
+        if state == Qt.Checked:
+            if grade not in self._kw_grades:
+                self._kw_grades.append(grade)
+        else:
+            if grade in self._kw_grades:
+                self._kw_grades.remove(grade)
 
     def _make_rank_limit_row(self) -> QVBoxLayout:
         outer = QVBoxLayout()
@@ -285,12 +308,17 @@ class LeftPanel(QWidget):
             self.status_label.setText('순위 탐색 범위를 올바른 숫자로 입력해주세요.')
             return
 
+        grades = sorted(self._kw_grades)
+        if not grades:
+            self.status_label.setText('키워드 등급을 하나 이상 선택해주세요.')
+            return
+
         self.analyze_requested.emit(
             blog_ids,
             self._post_count,
             self._kw_count,
             rank_limit,
-            self._kw_grade,
+            grades,
         )
 
     def set_analyzing(self, analyzing: bool):
