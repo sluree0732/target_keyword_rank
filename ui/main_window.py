@@ -1,6 +1,6 @@
 import time
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QSplitter, QSystemTrayIcon
 
@@ -20,6 +20,7 @@ class MainWindow(QMainWindow):
         self._errors = []
         self._analysis_start: float = 0.0
         self._pending_grades: list = []
+        self._grade_timer: QTimer | None = None
         self._analysis_blog_ids: list = []
         self._analysis_post_count: int = 5
         self._analysis_kw_count: int = 3
@@ -105,6 +106,8 @@ class MainWindow(QMainWindow):
 
     def _stop_analysis(self):
         self._pending_grades.clear()
+        if self._grade_timer and self._grade_timer.isActive():
+            self._grade_timer.stop()
         if self._analyzer and self._analyzer.isRunning():
             try:
                 self._analyzer.finished_all.disconnect(self._on_grade_finished)
@@ -124,10 +127,23 @@ class MainWindow(QMainWindow):
     def _on_grade_finished(self):
         if self._pending_grades:
             next_grade = self._pending_grades[0]
-            self.left_panel.update_status(f'다음 등급({next_grade}등급) 분석 시작 중...')
-            self._start_next_grade()
+            self._countdown_and_start(next_grade, 3)
         else:
             self._on_all_finished()
+
+    def _countdown_and_start(self, next_grade: int, remaining: int):
+        if remaining > 0:
+            self.left_panel.update_status(
+                f'{next_grade}등급 분석 대기 중... ({remaining}초)'
+            )
+            self._grade_timer = QTimer()
+            self._grade_timer.setSingleShot(True)
+            self._grade_timer.timeout.connect(
+                lambda: self._countdown_and_start(next_grade, remaining - 1)
+            )
+            self._grade_timer.start(1000)
+        else:
+            self._start_next_grade()
 
     def _on_all_finished(self):
         self.left_panel.set_analyzing(False)
