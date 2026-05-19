@@ -212,6 +212,7 @@ class RightPanel(QWidget):
         table.verticalHeader().setDefaultSectionSize(42)
         table.setProperty('rank_mode', 0)
         table.setProperty('_cur_blog', '')
+        table.setProperty('_cur_blog_start', -1)
         table.setStyleSheet(
             'QTableWidget {'
             '  background: white; border: none;'
@@ -395,22 +396,43 @@ class RightPanel(QWidget):
 
         if show_post_info:
             cur_blog = table.property('_cur_blog') or ''
-            is_same_blog = blog_url == cur_blog
-            if not is_same_blog:
-                table.setProperty('_cur_blog', blog_url)
+            cur_start = table.property('_cur_blog_start')
+            if cur_start is None:
+                cur_start = -1
+            is_same_blog = blog_url == cur_blog and cur_start >= 0
             group_bg = QColor('#EFF6FF')
-            for col in (0, 1):
-                cell = table.item(row, col)
-                if cell:
-                    cell.setBackground(group_bg)
-                    if is_same_blog:
+            if is_same_blog:
+                span = row - cur_start + 1
+                table.setSpan(cur_start, 0, span, 1)
+                table.setSpan(cur_start, 1, span, 1)
+                for col in (0, 1):
+                    cell = table.item(row, col)
+                    if cell:
                         cell.setText('')
+                        cell.setToolTip('')
+                        cell.setFlags(Qt.ItemIsEnabled)
+                        cell.setBackground(group_bg)
+            else:
+                table.setProperty('_cur_blog', blog_url)
+                table.setProperty('_cur_blog_start', row)
+                for col in (0, 1):
+                    cell = table.item(row, col)
+                    if cell:
+                        cell.setFlags(Qt.ItemIsEnabled)
+                        cell.setBackground(group_bg)
+                cell0 = table.item(row, 0)
+                if cell0:
+                    cell0.setTextAlignment(Qt.AlignTop | Qt.AlignHCenter)
+                cell1 = table.item(row, 1)
+                if cell1:
+                    cell1.setTextAlignment(Qt.AlignTop | Qt.AlignHCenter)
             for col in (2, 3, 4):
                 cell = table.item(row, col)
                 if cell:
                     cell.setBackground(alt_bg)
         else:
             table.setProperty('_cur_blog', '')
+            table.setProperty('_cur_blog_start', -1)
             for col in (3, 4):
                 cell = table.item(row, col)
                 if cell:
@@ -519,6 +541,7 @@ class RightPanel(QWidget):
             header_item.setText(header_texts[mode])
 
         table.setProperty('_cur_blog', '')
+        table.setProperty('_cur_blog_start', -1)
         table.setRowCount(0)
 
         if mode == 1:
