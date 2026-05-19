@@ -1,7 +1,6 @@
 from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -39,10 +38,11 @@ class LeftPanel(QWidget):
         self.setMaximumWidth(420)
         self._post_count = 5
         self._post_count_btns = []
-        self._kw_count = 3
+        self._kw_count = 0
         self._kw_count_btns = []
-        self._kw_grades = [3]
-        self._kw_grade_checks = []
+        self._kw_grades = []
+        self._kw_grade_btns = []
+        self._multi_grade_mode = False
         self._is_analyzing = False
         self._setup_ui()
 
@@ -113,13 +113,13 @@ class LeftPanel(QWidget):
 
         # 키워드 추출 개수 (토글 버튼 1~5)
         layout.addLayout(self._make_toggle_row(
-            '키워드 추출 개수', 1, 5, 3,
+            '키워드 추출 개수', 1, 5, 0,
             self._kw_count_btns,
             self._on_kw_count_clicked,
         ))
 
-        # 키워드 등급 (체크박스 1~5, 복수 선택 가능)
-        layout.addLayout(self._make_grade_checkboxes())
+        # 키워드 등급 (단일/다중선택 토글 버튼)
+        layout.addLayout(self._make_grade_multi_btns())
 
         # 순위 탐색 범위 (텍스트 입력)
         layout.addLayout(self._make_rank_limit_row())
@@ -206,35 +206,60 @@ class LeftPanel(QWidget):
         self._kw_count = value
         self._refresh_toggle_style(self._kw_count_btns, value)
 
-    def _make_grade_checkboxes(self) -> QVBoxLayout:
+    def _make_grade_multi_btns(self) -> QVBoxLayout:
         outer = QVBoxLayout()
         outer.setSpacing(6)
-        outer.addWidget(QLabel('키워드 등급  (1=대표  ↔  5=세부)'))
 
-        check_row = QHBoxLayout()
-        check_row.setSpacing(16)
+        header = QHBoxLayout()
+        header.addWidget(QLabel('키워드 등급  (1=대표  ↔  5=세부)'))
+        header.addStretch()
 
+        self._multi_grade_btn = QPushButton('다중선택')
+        self._multi_grade_btn.setFixedHeight(26)
+        self._multi_grade_btn.setCursor(Qt.PointingHandCursor)
+        self._multi_grade_btn.setStyleSheet(BTN_NORMAL)
+        self._multi_grade_btn.clicked.connect(self._toggle_multi_grade_mode)
+        header.addWidget(self._multi_grade_btn)
+        outer.addLayout(header)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         for n in range(1, 6):
-            cb = QCheckBox(str(n))
-            cb.setChecked(n in self._kw_grades)
-            cb.setFont(QFont('', 11, QFont.Bold))
-            cb.setCursor(Qt.PointingHandCursor)
-            cb.setStyleSheet('QCheckBox { spacing: 6px; }')
-            cb.stateChanged.connect(lambda state, val=n: self._on_grade_check_changed(val, state))
-            self._kw_grade_checks.append(cb)
-            check_row.addWidget(cb)
-
-        check_row.addStretch()
-        outer.addLayout(check_row)
+            btn = QPushButton(str(n))
+            btn.setFixedSize(46, 36)
+            btn.setFont(QFont('', 11, QFont.Bold))
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(BTN_NORMAL)
+            btn.clicked.connect(lambda _, val=n: self._on_grade_btn_clicked(val))
+            self._kw_grade_btns.append(btn)
+            btn_row.addWidget(btn)
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
         return outer
 
-    def _on_grade_check_changed(self, grade: int, state: int):
-        if state == Qt.Checked:
-            if grade not in self._kw_grades:
-                self._kw_grades.append(grade)
-        else:
+    def _toggle_multi_grade_mode(self):
+        self._multi_grade_mode = not self._multi_grade_mode
+        self._multi_grade_btn.setStyleSheet(
+            BTN_SELECTED if self._multi_grade_mode else BTN_NORMAL
+        )
+        if not self._multi_grade_mode and len(self._kw_grades) > 1:
+            # 다중선택 해제 시 마지막 선택 등급 하나만 유지
+            self._kw_grades = [self._kw_grades[-1]]
+            self._refresh_grade_btns()
+
+    def _on_grade_btn_clicked(self, grade: int):
+        if self._multi_grade_mode:
             if grade in self._kw_grades:
                 self._kw_grades.remove(grade)
+            else:
+                self._kw_grades.append(grade)
+        else:
+            self._kw_grades = [grade]
+        self._refresh_grade_btns()
+
+    def _refresh_grade_btns(self):
+        for i, btn in enumerate(self._kw_grade_btns):
+            btn.setStyleSheet(BTN_SELECTED if (i + 1) in self._kw_grades else BTN_NORMAL)
 
     def _make_rank_limit_row(self) -> QVBoxLayout:
         outer = QVBoxLayout()
@@ -300,6 +325,10 @@ class LeftPanel(QWidget):
             self.url_input.setPlainText('\n'.join(unique_ids))
             blog_ids = unique_ids
 
+        if self._kw_count == 0:
+            self.status_label.setText('키워드 추출 개수를 선택해주세요.')
+            return
+
         try:
             rank_limit = int(self.rank_limit_input.text().strip())
             if rank_limit < 1:
@@ -310,7 +339,7 @@ class LeftPanel(QWidget):
 
         grades = sorted(self._kw_grades)
         if not grades:
-            self.status_label.setText('키워드 등급을 하나 이상 선택해주세요.')
+            self.status_label.setText('키워드 등급을 선택해주세요.')
             return
 
         self.analyze_requested.emit(
