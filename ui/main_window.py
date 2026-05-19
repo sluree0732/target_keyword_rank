@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QSplitter
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QSplitter, QSystemTrayIcon
 
 from core.analyzer import AnalyzerThread
 from ui.left_panel import LeftPanel
@@ -38,6 +38,10 @@ class MainWindow(QMainWindow):
         self.left_panel.analyze_requested.connect(self._start_analysis)
         self.left_panel.stop_requested.connect(self._stop_analysis)
         self._center_on_screen()
+
+        self._tray = QSystemTrayIcon(self.windowIcon(), self)
+        self._tray.setToolTip('타겟 키워드 노출 여부 분석')
+        self._tray.show()
 
     def _center_on_screen(self):
         screen = QApplication.primaryScreen()
@@ -92,6 +96,12 @@ class MainWindow(QMainWindow):
         self.left_panel.set_analyzing(False)
         count = self.right_panel.result_count
         self.left_panel.update_status(f'분석 완료 — 총 {count}건')
+        self._tray.showMessage(
+            '분석 완료',
+            f'총 {count}건 수집되었습니다.',
+            QSystemTrayIcon.Information,
+            5000,
+        )
 
         if count == 0 and self._errors:
             error_text = '\n'.join(f'• {e}' for e in self._errors)
@@ -107,4 +117,5 @@ class MainWindow(QMainWindow):
         if self._analyzer and self._analyzer.isRunning():
             self._analyzer.cancel()
             self._analyzer.wait()
+        self._tray.hide()
         event.accept()
