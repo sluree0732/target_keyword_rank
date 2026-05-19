@@ -32,6 +32,12 @@ BTN_SMALL = (
     '}'
     'QPushButton:hover { background-color: #EFF6FF; border-color: #93C5FD; }'
 )
+BTN_SMALL_SELECTED = (
+    'QPushButton {'
+    '  background-color: #1D4F91; color: white;'
+    '  border: none; border-radius: 5px; font-weight: bold; padding: 0 10px;'
+    '}'
+)
 
 
 class LeftPanel(QWidget):
@@ -251,7 +257,7 @@ class LeftPanel(QWidget):
     def _toggle_multi_grade_mode(self):
         self._multi_grade_mode = not self._multi_grade_mode
         self._multi_grade_btn.setStyleSheet(
-            BTN_SELECTED if self._multi_grade_mode else BTN_NORMAL
+            BTN_SMALL_SELECTED if self._multi_grade_mode else BTN_SMALL
         )
         if not self._multi_grade_mode and len(self._kw_grades) > 1:
             # 다중선택 해제 시 마지막 선택 등급 하나만 유지
