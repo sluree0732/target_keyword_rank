@@ -1,3 +1,5 @@
+import time
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QSplitter, QSystemTrayIcon
@@ -16,6 +18,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(self.style().standardIcon(self.style().SP_ComputerIcon))
         self._analyzer = None
         self._errors = []
+        self._analysis_start: float = 0.0
 
         splitter = QSplitter(Qt.Horizontal)
         self.left_panel = LeftPanel()
@@ -65,6 +68,7 @@ class MainWindow(QMainWindow):
             self._analyzer.wait()
 
         self._errors.clear()
+        self._analysis_start = time.time()
         self.right_panel.start_new_analysis(keyword_grade, post_count, keyword_count, rank_limit)
         self.right_panel.update_legend(rank_limit)
         self.left_panel.set_analyzing(True)
@@ -96,9 +100,12 @@ class MainWindow(QMainWindow):
         self.left_panel.set_analyzing(False)
         count = self.right_panel.result_count
         self.left_panel.update_status(f'분석 완료 — 총 {count}건')
+        elapsed = int(time.time() - self._analysis_start)
+        minutes, seconds = divmod(elapsed, 60)
+        elapsed_str = f'{minutes}분 {seconds}초' if minutes else f'{seconds}초'
         self._tray.showMessage(
             '분석 완료',
-            f'총 {count}건 수집되었습니다.',
+            f'총 {count}건 수집되었습니다.\n소요 시간: {elapsed_str}',
             QSystemTrayIcon.Information,
             5000,
         )
