@@ -12,7 +12,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('타겟 키워드 노출 여부 분석')
         self.setMinimumSize(1180, 720)
-        self.resize(1360, 820)
+        self.resize(1500, 820)
         self.setWindowIcon(self.style().standardIcon(self.style().SP_ComputerIcon))
         self._analyzer = None
         self._errors = []
