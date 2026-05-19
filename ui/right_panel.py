@@ -65,14 +65,13 @@ class RightPanel(QWidget):
 
         self.reset_btn = QPushButton('전체 초기화')
         self.reset_btn.setMinimumHeight(38)
-        self.reset_btn.setMinimumWidth(110)
         self.reset_btn.setFont(QFont('', 10))
         self.reset_btn.setEnabled(False)
         self.reset_btn.setCursor(Qt.PointingHandCursor)
         self.reset_btn.setStyleSheet(
             'QPushButton {'
             '  background-color: #6B7280; color: white;'
-            '  border-radius: 6px; border: none; padding: 0 16px;'
+            '  border-radius: 6px; border: none; padding: 0 10px;'
             '}'
             'QPushButton:hover { background-color: #4B5563; }'
             'QPushButton:pressed { background-color: #374151; }'
@@ -83,14 +82,13 @@ class RightPanel(QWidget):
 
         self.download_btn = QPushButton('엑셀 다운로드')
         self.download_btn.setMinimumHeight(38)
-        self.download_btn.setMinimumWidth(132)
         self.download_btn.setFont(QFont('', 10, QFont.Bold))
         self.download_btn.setEnabled(False)
         self.download_btn.setCursor(Qt.PointingHandCursor)
         self.download_btn.setStyleSheet(
             'QPushButton {'
             '  background-color: #1F7A3A; color: white;'
-            '  border-radius: 6px; border: none; padding: 0 16px;'
+            '  border-radius: 6px; border: none; padding: 0 10px;'
             '}'
             'QPushButton:hover { background-color: #238447; }'
             'QPushButton:pressed { background-color: #145A2A; }'

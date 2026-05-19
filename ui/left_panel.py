@@ -25,6 +25,13 @@ BTN_NORMAL = (
     '}'
     'QPushButton:hover { background-color: #EFF6FF; border-color: #93C5FD; }'
 )
+BTN_SMALL = (
+    'QPushButton {'
+    '  background-color: #FFFFFF; color: #374151;'
+    '  border: 1px solid #CBD5E1; border-radius: 5px; padding: 0 10px;'
+    '}'
+    'QPushButton:hover { background-color: #EFF6FF; border-color: #93C5FD; }'
+)
 
 
 class LeftPanel(QWidget):
@@ -70,13 +77,13 @@ class LeftPanel(QWidget):
         add_list_btn = QPushButton('추가하기')
         add_list_btn.setFixedHeight(26)
         add_list_btn.setCursor(Qt.PointingHandCursor)
-        add_list_btn.setStyleSheet(BTN_NORMAL)
+        add_list_btn.setStyleSheet(BTN_SMALL)
         add_list_btn.clicked.connect(self._on_add_list_clicked)
 
         load_list_btn = QPushButton('불러오기')
         load_list_btn.setFixedHeight(26)
         load_list_btn.setCursor(Qt.PointingHandCursor)
-        load_list_btn.setStyleSheet(BTN_NORMAL)
+        load_list_btn.setStyleSheet(BTN_SMALL)
         load_list_btn.clicked.connect(self._on_load_list_clicked)
 
         id_header = QHBoxLayout()
@@ -105,6 +112,7 @@ class LeftPanel(QWidget):
         layout.addWidget(self.url_input)
 
         # 최근 게시물 추출 개수 (토글 버튼 1~5)
+        layout.addSpacing(8)
         layout.addLayout(self._make_toggle_row(
             '최근 게시물 추출 개수', 1, 5, 5,
             self._post_count_btns,
@@ -112,6 +120,7 @@ class LeftPanel(QWidget):
         ))
 
         # 키워드 추출 개수 (토글 버튼 1~5)
+        layout.addSpacing(8)
         layout.addLayout(self._make_toggle_row(
             '키워드 추출 개수', 1, 5, 0,
             self._kw_count_btns,
@@ -119,9 +128,11 @@ class LeftPanel(QWidget):
         ))
 
         # 키워드 등급 (단일/다중선택 토글 버튼)
+        layout.addSpacing(8)
         layout.addLayout(self._make_grade_multi_btns())
 
         # 순위 탐색 범위 (텍스트 입력)
+        layout.addSpacing(8)
         layout.addLayout(self._make_rank_limit_row())
 
         # 분석 시작 버튼
@@ -217,7 +228,7 @@ class LeftPanel(QWidget):
         self._multi_grade_btn = QPushButton('다중선택')
         self._multi_grade_btn.setFixedHeight(26)
         self._multi_grade_btn.setCursor(Qt.PointingHandCursor)
-        self._multi_grade_btn.setStyleSheet(BTN_NORMAL)
+        self._multi_grade_btn.setStyleSheet(BTN_SMALL)
         self._multi_grade_btn.clicked.connect(self._toggle_multi_grade_mode)
         header.addWidget(self._multi_grade_btn)
         outer.addLayout(header)
