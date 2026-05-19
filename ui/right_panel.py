@@ -274,7 +274,7 @@ class RightPanel(QWidget):
             return
 
         usable = max(width - 2, 0)
-        col0 = max(int(usable * 0.09), 80)
+        col0 = max(int(usable * 0.09), 120)
         col1 = max(int(usable * 0.08), 72)
         col3 = max(int(usable * 0.19), 140)
         col4_reserved = max(int(usable * 0.08), 65)
