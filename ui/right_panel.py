@@ -237,9 +237,17 @@ class RightPanel(QWidget):
 
         self.update_legend(5)
 
+    # 열 인덱스 상수
+    COL_BLOG = 0
+    COL_VISITOR = 1
+    COL_TITLE = 2
+    COL_LINK = 3
+    COL_KEYWORD = 4
+    COL_RANK = 5
+
     def _make_tab_table(self) -> QTableWidget:
-        table = QTableWidget(0, 5)
-        table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', '키워드', '순위'])
+        table = QTableWidget(0, 6)
+        table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', '↗', '키워드', '순위'])
         table.setEditTriggers(QTableWidget.DoubleClicked)
         table.setSelectionMode(QTableWidget.ExtendedSelection)
         table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -272,8 +280,9 @@ class RightPanel(QWidget):
         header.setDefaultAlignment(Qt.AlignCenter)
         header.setStretchLastSection(True)
         header.setCursor(Qt.PointingHandCursor)
-        for col in range(4):
+        for col in (self.COL_BLOG, self.COL_VISITOR, self.COL_TITLE, self.COL_KEYWORD):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
+        header.setSectionResizeMode(self.COL_LINK, QHeaderView.Fixed)
 
         table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -281,8 +290,8 @@ class RightPanel(QWidget):
         header.sectionClicked.connect(
             lambda col, t=table: self._on_rank_header_clicked(col, t)
         )
-        table.cellDoubleClicked.connect(
-            lambda row, col, t=table: self._open_post_for_row(row, col, t)
+        table.cellClicked.connect(
+            lambda row, col, t=table: self._on_cell_clicked(row, col, t)
         )
         table.itemSelectionChanged.connect(
             lambda t=table: self._on_row_selected(t)
@@ -318,13 +327,15 @@ class RightPanel(QWidget):
         usable = max(width - 2, 0)
         col0 = max(int(usable * 0.09), 120)
         col1 = max(int(usable * 0.08), 72)
-        col3 = max(int(usable * 0.19), 140)
+        col3_link = 28
+        col4 = max(int(usable * 0.19), 140)
         col4_reserved = max(int(usable * 0.08), 65)
-        col2 = max(usable - col0 - col1 - col3 - col4_reserved, 80)
+        col2 = max(usable - col0 - col1 - col3_link - col4 - col4_reserved, 80)
         table.setColumnWidth(0, col0)
         table.setColumnWidth(1, col1)
         table.setColumnWidth(2, col2)
-        table.setColumnWidth(3, col3)
+        table.setColumnWidth(3, col3_link)
+        table.setColumnWidth(4, col4)
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
         self._rank_limit = rank_limit
@@ -388,7 +399,7 @@ class RightPanel(QWidget):
         # 필터 활성 중 새 데이터 추가 시 필터 해제
         if (table.property('rank_mode') or 0) != 0:
             table.setProperty('rank_mode', 0)
-            table.horizontalHeaderItem(4).setText('순위')
+            table.horizontalHeaderItem(5).setText('순위')
 
         self._insert_row(table, item)
         self._update_summary()
@@ -421,9 +432,20 @@ class RightPanel(QWidget):
                 empty.setBackground(QColor('#F0F4F8'))
                 table.setItem(row, col, empty)
 
+        if post_url:
+            link_item = QTableWidgetItem('↗')
+            link_item.setTextAlignment(Qt.AlignCenter)
+            link_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            link_item.setForeground(QColor('#2563EB'))
+            link_item.setToolTip('게시글 열기')
+        else:
+            link_item = QTableWidgetItem('')
+            link_item.setFlags(Qt.ItemIsEnabled)
+        table.setItem(row, self.COL_LINK, link_item)
+
         kw_item = self._make_item(keyword)
         kw_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
-        table.setItem(row, 3, kw_item)
+        table.setItem(row, self.COL_KEYWORD, kw_item)
 
         rank_text = f'{rank}위' if rank > 0 else '-'
         rank_item = self._make_item(rank_text, Qt.AlignCenter)
@@ -433,7 +455,7 @@ class RightPanel(QWidget):
             rank_item.setFont(QFont('', -1, QFont.Bold))
         else:
             rank_item.setForeground(QColor('#B91C1C'))
-        table.setItem(row, 4, rank_item)
+        table.setItem(row, self.COL_RANK, rank_item)
 
         for col in range(table.columnCount()):
             cell = table.item(row, col)
@@ -476,14 +498,14 @@ class RightPanel(QWidget):
                 cell1 = table.item(row, 1)
                 if cell1:
                     cell1.setTextAlignment(Qt.AlignTop | Qt.AlignHCenter)
-            for col in (2, 3, 4):
+            for col in (2, 3, 4, 5):
                 cell = table.item(row, col)
                 if cell:
                     cell.setBackground(alt_bg)
         else:
             table.setProperty('_cur_blog', '')
             table.setProperty('_cur_blog_start', -1)
-            for col in (3, 4):
+            for col in (3, 4, 5):
                 cell = table.item(row, col)
                 if cell:
                     cell.setBackground(alt_bg)
@@ -496,7 +518,9 @@ class RightPanel(QWidget):
         item.setToolTip(tooltip or text)
         return item
 
-    def _open_post_for_row(self, row: int, _column: int, table: QTableWidget):
+    def _on_cell_clicked(self, row: int, col: int, table: QTableWidget):
+        if col != self.COL_LINK:
+            return
         item = table.item(row, 0)
         if not item:
             return
@@ -525,7 +549,7 @@ class RightPanel(QWidget):
         self._tab_results.insert(to_idx, self._tab_results.pop(from_idx))
 
     def _on_rank_header_clicked(self, col: int, table: QTableWidget):
-        if col != 4:
+        if col != 5:
             return
         idx = self.tab_widget.indexOf(table)
         if idx < 0 or idx >= len(self._tab_results):
@@ -587,7 +611,7 @@ class RightPanel(QWidget):
 
     def _refresh_table_view(self, table: QTableWidget, results: list):
         mode = table.property('rank_mode') or 0
-        header_item = table.horizontalHeaderItem(4)
+        header_item = table.horizontalHeaderItem(5)
         if header_item:
             header_texts = ['순위', '순위 ↑', '순위만']
             header_item.setText(header_texts[mode])
@@ -712,7 +736,7 @@ class RightPanel(QWidget):
             QMessageBox.warning(self, '저장 실패', str(e))
 
     def _on_keyword_cell_changed(self, changed_item: QTableWidgetItem, table: QTableWidget):
-        if changed_item.column() != 3:
+        if changed_item.column() != 4:
             return
         if not (changed_item.flags() & Qt.ItemIsEditable):
             return
@@ -739,7 +763,7 @@ class RightPanel(QWidget):
         tasks = []
         for index in selected_rows:
             row = index.row()
-            kw_item = table.item(row, 3)
+            kw_item = table.item(row, 4)
             if not kw_item:
                 continue
             keyword = kw_item.text().strip()
@@ -776,7 +800,7 @@ class RightPanel(QWidget):
             if item:
                 item['rank'] = rank
 
-        rank_cell = table.item(row, 4)
+        rank_cell = table.item(row, 5)
         if rank_cell:
             table.blockSignals(True)
             rank_text = f'{rank}위' if rank > 0 else '-'
