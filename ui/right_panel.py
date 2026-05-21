@@ -169,7 +169,7 @@ class RightPanel(QWidget):
 
         # 행 선택 상세 정보 바 (선택 시에만 표시)
         self.detail_frame = QFrame()
-        self.detail_frame.setVisible(False)
+        self.detail_frame.setVisible(True)
         self.detail_frame.setStyleSheet(
             'QFrame { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; }'
             'QLabel { border: none; background: transparent; }'
@@ -191,6 +191,9 @@ class RightPanel(QWidget):
         self._detail_title = self._make_detail_value()
         self._detail_keyword = self._make_detail_value('#1D4F91')
         self._detail_rank = self._make_detail_value('#166534')
+        for w in (self._detail_blog, self._detail_visitor, self._detail_title,
+                  self._detail_keyword, self._detail_rank):
+            w.setText('-')
 
         for lbl_text, val_widget in [
             ('블로그', self._detail_blog),
@@ -247,7 +250,7 @@ class RightPanel(QWidget):
 
     def _make_tab_table(self) -> QTableWidget:
         table = QTableWidget(0, 6)
-        table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', '↗', '키워드', '순위'])
+        table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', 'URL', '키워드', '순위'])
         table.setEditTriggers(QTableWidget.DoubleClicked)
         table.setSelectionMode(QTableWidget.ExtendedSelection)
         table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -327,7 +330,7 @@ class RightPanel(QWidget):
         usable = max(width - 2, 0)
         col0 = max(int(usable * 0.09), 120)
         col1 = max(int(usable * 0.08), 72)
-        col3_link = 28
+        col3_link = 44
         col4 = max(int(usable * 0.19), 140)
         col4_reserved = max(int(usable * 0.08), 65)
         col2 = max(usable - col0 - col1 - col3_link - col4 - col4_reserved, 80)
@@ -402,6 +405,8 @@ class RightPanel(QWidget):
             table.horizontalHeaderItem(5).setText('순위')
 
         self._insert_row(table, item)
+        if table.rowCount() == 1:
+            table.selectRow(0)
         self._update_summary()
         table.scrollToBottom()
         self.download_btn.setEnabled(True)
@@ -433,7 +438,7 @@ class RightPanel(QWidget):
                 table.setItem(row, col, empty)
 
         if post_url:
-            link_item = QTableWidgetItem('↗')
+            link_item = QTableWidgetItem('⧉')
             link_item.setTextAlignment(Qt.AlignCenter)
             link_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             link_item.setForeground(QColor('#2563EB'))
@@ -640,7 +645,7 @@ class RightPanel(QWidget):
         self._close_btns.clear()
         self.tab_widget.clear()
         self._tab_results.clear()
-        self.detail_frame.setVisible(False)
+        self._clear_detail_bar()
         self.download_btn.setEnabled(False)
         self.reset_btn.setEnabled(False)
         self._update_summary()
@@ -652,17 +657,17 @@ class RightPanel(QWidget):
 
         row = table.currentRow()
         if row < 0 or not selected_rows:
-            self.detail_frame.setVisible(False)
+            self._clear_detail_bar()
             return
 
         cell = table.item(row, 0)
         if not cell:
-            self.detail_frame.setVisible(False)
+            self._clear_detail_bar()
             return
 
         item = cell.data(self.ITEM_DATA_ROLE)
         if not item:
-            self.detail_frame.setVisible(False)
+            self._clear_detail_bar()
             return
 
         self._detail_blog.setText(_display_blog_id(item['blog_url']))
@@ -674,13 +679,18 @@ class RightPanel(QWidget):
         self._detail_rank.setText(rank)
         color = '#166534' if item['rank'] > 0 else '#B91C1C'
         self._detail_rank.setStyleSheet(f'color: {color}; font-weight: bold; font-size: 9pt;')
-        self.detail_frame.setVisible(True)
+
+    def _clear_detail_bar(self):
+        for w in (self._detail_blog, self._detail_visitor, self._detail_title,
+                  self._detail_keyword, self._detail_rank):
+            w.setText('-')
+        self._detail_rank.setStyleSheet('color: #166534; font-weight: bold; font-size: 9pt;')
 
     def eventFilter(self, obj, event):
         return super().eventFilter(obj, event)
 
     def _on_tab_changed(self, index: int):
-        self.detail_frame.setVisible(False)
+        self._clear_detail_bar()
         self._update_summary()
         has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
         self.download_btn.setEnabled(has_results)
