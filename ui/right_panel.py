@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 from PyQt5.QtCore import QEvent, QThread, QTimer, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtGui import QBrush, QColor, QFont, QPalette
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QStyleOptionViewItem,
+    QStyle,
     QStyledItemDelegate,
     QTabBar,
     QTabWidget,
@@ -29,13 +29,13 @@ from utils.excel_exporter import export_to_excel
 
 
 class _KeywordDelegate(QStyledItemDelegate):
-    def paint(self, painter, option, index):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
         if index.data(Qt.UserRole + 4):  # MODIFIED_ROLE
-            opt = QStyleOptionViewItem(option)
-            opt.palette.setColor(QPalette.HighlightedText, QColor('#1D4F91'))
-            super().paint(painter, opt, index)
-        else:
-            super().paint(painter, option, index)
+            if option.state & QStyle.State_Selected:
+                option.palette.setColor(QPalette.HighlightedText, QColor('#1D4F91'))
+            else:
+                option.backgroundBrush = QBrush(QColor('#FEF9C3'))
 
 
 class _TitleReadOnlyDelegate(QStyledItemDelegate):
