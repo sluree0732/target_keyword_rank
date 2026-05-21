@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import QEvent, QItemSelectionModel, QThread, QTimer, Qt, QUrl, pyqtSignal
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import QEvent, QThread, QTimer, Qt, QUrl, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QStyleOptionViewItem,
     QStyledItemDelegate,
     QTabBar,
     QTabWidget,
@@ -25,6 +26,16 @@ from PyQt5.QtWidgets import (
 )
 
 from utils.excel_exporter import export_to_excel
+
+
+class _KeywordDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        if index.data(Qt.UserRole + 4):  # MODIFIED_ROLE
+            opt = QStyleOptionViewItem(option)
+            opt.palette.setColor(QPalette.HighlightedText, QColor('#1D4F91'))
+            super().paint(painter, opt, index)
+        else:
+            super().paint(painter, option, index)
 
 
 class _TitleReadOnlyDelegate(QStyledItemDelegate):
@@ -318,10 +329,8 @@ class RightPanel(QWidget):
         table.itemChanged.connect(
             lambda item, t=table: self._on_keyword_cell_changed(item, t)
         )
-        table.selectionModel().selectionChanged.connect(
-            lambda sel, desel, t=table: self._on_modified_selection_guard(sel, desel, t)
-        )
         table.setItemDelegateForColumn(self.COL_TITLE, _TitleReadOnlyDelegate(table))
+        table.setItemDelegateForColumn(self.COL_KEYWORD, _KeywordDelegate(table))
         QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
         return table
 
@@ -794,13 +803,6 @@ class RightPanel(QWidget):
         changed_item.setData(self.MODIFIED_ROLE, True)
         table.blockSignals(False)
         self.recheck_btn.setEnabled(True)
-        sm = table.selectionModel()
-        sm.blockSignals(True)
-        sm.select(
-            table.model().index(row, 0),
-            QItemSelectionModel.Select | QItemSelectionModel.Rows,
-        )
-        sm.blockSignals(False)
 
     def _has_modified_rows(self, table: QTableWidget) -> bool:
         for row in range(table.rowCount()):
@@ -808,23 +810,6 @@ class RightPanel(QWidget):
             if kw_cell and kw_cell.data(self.MODIFIED_ROLE):
                 return True
         return False
-
-    def _on_modified_selection_guard(self, selected, deselected, table: QTableWidget):
-        sm = table.selectionModel()
-        to_restore = [
-            row for row in range(table.rowCount())
-            if (kc := table.item(row, self.COL_KEYWORD))
-            and kc.data(self.MODIFIED_ROLE)
-            and not sm.isRowSelected(row)
-        ]
-        if to_restore:
-            sm.blockSignals(True)
-            for row in to_restore:
-                sm.select(
-                    table.model().index(row, 0),
-                    QItemSelectionModel.Select | QItemSelectionModel.Rows,
-                )
-            sm.blockSignals(False)
 
     def _on_recheck_clicked(self):
         idx = self.tab_widget.currentIndex()
