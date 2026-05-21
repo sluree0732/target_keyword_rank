@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import QEvent, QTimer, Qt, QUrl
+from PyQt5.QtCore import QEvent, QThread, QTimer, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
@@ -23,6 +23,27 @@ from PyQt5.QtWidgets import (
 )
 
 from utils.excel_exporter import export_to_excel
+
+
+class _ReCheckWorker(QThread):
+    row_done = pyqtSignal(int, int)  # row_index, rank
+    all_done = pyqtSignal()
+
+    def __init__(self, tasks: list, rank_limit: int):
+        super().__init__()
+        self._tasks = tasks  # list of (row_index, post_url, keyword)
+        self._rank_limit = rank_limit
+
+    def run(self):
+        from core.rank_checker import check_rank, create_session
+        session = create_session()
+        for row_idx, post_url, keyword in self._tasks:
+            try:
+                rank = check_rank(keyword, post_url, session, self._rank_limit)
+            except Exception:
+                rank = 0
+            self.row_done.emit(row_idx, rank)
+        self.all_done.emit()
 
 
 def _display_blog_id(blog_url: str) -> str:
@@ -47,6 +68,8 @@ class RightPanel(QWidget):
         super().__init__()
         self._tab_results: list = []  # list of list[dict], one per tab
         self._close_btns: list = []
+        self._rank_limit: int = 30
+        self._recheck_worker: _ReCheckWorker | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -96,6 +119,24 @@ class RightPanel(QWidget):
         )
         self.download_btn.clicked.connect(self._on_download)
         header_row.addWidget(self.download_btn)
+
+        self.recheck_btn = QPushButton('순위 재확인')
+        self.recheck_btn.setMinimumHeight(38)
+        self.recheck_btn.setFont(QFont('', 10))
+        self.recheck_btn.setEnabled(False)
+        self.recheck_btn.setCursor(Qt.PointingHandCursor)
+        self.recheck_btn.setStyleSheet(
+            'QPushButton {'
+            '  background-color: #1D4F91; color: white;'
+            '  border-radius: 6px; border: none; padding: 0 10px;'
+            '}'
+            'QPushButton:hover { background-color: #2563EB; }'
+            'QPushButton:pressed { background-color: #1E3A6E; }'
+            'QPushButton:disabled { background-color: #D1D5DB; color: #9CA3AF; }'
+        )
+        self.recheck_btn.clicked.connect(self._on_recheck_clicked)
+        header_row.addWidget(self.recheck_btn)
+
         layout.addLayout(header_row)
 
         self.summary_frame = QFrame()
@@ -199,8 +240,8 @@ class RightPanel(QWidget):
     def _make_tab_table(self) -> QTableWidget:
         table = QTableWidget(0, 5)
         table.setHorizontalHeaderLabels(['블로그', '방문자수', '게시글 제목', '키워드', '순위'])
-        table.setEditTriggers(QTableWidget.NoEditTriggers)
-        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setEditTriggers(QTableWidget.DoubleClicked)
+        table.setSelectionMode(QTableWidget.ExtendedSelection)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setAlternatingRowColors(False)
         table.setShowGrid(False)
@@ -246,6 +287,9 @@ class RightPanel(QWidget):
         table.itemSelectionChanged.connect(
             lambda t=table: self._on_row_selected(t)
         )
+        table.itemChanged.connect(
+            lambda item, t=table: self._on_keyword_cell_changed(item, t)
+        )
         QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
         return table
 
@@ -283,6 +327,7 @@ class RightPanel(QWidget):
         table.setColumnWidth(3, col3)
 
     def start_new_analysis(self, grade: int, post_count: int, keyword_count: int, rank_limit: int):
+        self._rank_limit = rank_limit
         label = f'키워드 등급{grade}'
 
         table = self._make_tab_table()
@@ -359,23 +404,30 @@ class RightPanel(QWidget):
         post_url = item.get('post_url', '')
 
         row = table.rowCount()
+        table.blockSignals(True)
         table.insertRow(row)
 
         if show_post_info:
             visitor_text = str(visitor_count) if visitor_count > 0 else '-'
             table.setItem(row, 0, self._make_item(_display_blog_id(blog_url), tooltip=blog_url))
             table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
-            table.setItem(row, 2, self._make_item(post_title))
+            title_item = self._make_item(post_title)
+            title_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            table.setItem(row, 2, title_item)
         else:
             for col in (0, 1, 2):
                 empty = QTableWidgetItem('')
+                empty.setFlags(Qt.ItemIsEnabled)
                 empty.setBackground(QColor('#F0F4F8'))
                 table.setItem(row, col, empty)
 
-        table.setItem(row, 3, self._make_item(keyword))
+        kw_item = self._make_item(keyword)
+        kw_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+        table.setItem(row, 3, kw_item)
 
         rank_text = f'{rank}위' if rank > 0 else '-'
         rank_item = self._make_item(rank_text, Qt.AlignCenter)
+        rank_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         if rank > 0:
             rank_item.setForeground(QColor('#166534'))
             rank_item.setFont(QFont('', -1, QFont.Bold))
@@ -435,6 +487,8 @@ class RightPanel(QWidget):
                 cell = table.item(row, col)
                 if cell:
                     cell.setBackground(alt_bg)
+
+        table.blockSignals(False)
 
     def _make_item(self, text, align=Qt.AlignVCenter | Qt.AlignLeft, tooltip=None):
         item = QTableWidgetItem(text)
@@ -568,8 +622,12 @@ class RightPanel(QWidget):
         self._update_summary()
 
     def _on_row_selected(self, table: QTableWidget):
+        selected_rows = table.selectionModel().selectedRows()
+        is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
+        self.recheck_btn.setEnabled(len(selected_rows) > 0 and not is_rechecking)
+
         row = table.currentRow()
-        if row < 0:
+        if row < 0 or not selected_rows:
             self.detail_frame.setVisible(False)
             return
 
@@ -602,6 +660,7 @@ class RightPanel(QWidget):
         self._update_summary()
         has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
         self.download_btn.setEnabled(has_results)
+        self.recheck_btn.setEnabled(False)
 
     def _update_summary(self):
         idx = self.tab_widget.currentIndex()
@@ -651,3 +710,92 @@ class RightPanel(QWidget):
             msg.exec_()
         except Exception as e:
             QMessageBox.warning(self, '저장 실패', str(e))
+
+    def _on_keyword_cell_changed(self, changed_item: QTableWidgetItem, table: QTableWidget):
+        if changed_item.column() != 3:
+            return
+        if not (changed_item.flags() & Qt.ItemIsEditable):
+            return
+        row = changed_item.row()
+        cell0 = table.item(row, 0)
+        if not cell0:
+            return
+        item = cell0.data(self.ITEM_DATA_ROLE)
+        if item:
+            item['keyword'] = changed_item.text().strip()
+
+    def _on_recheck_clicked(self):
+        idx = self.tab_widget.currentIndex()
+        if idx < 0:
+            return
+        table = self.tab_widget.widget(idx)
+        if not table:
+            return
+
+        selected_rows = table.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+
+        tasks = []
+        for index in selected_rows:
+            row = index.row()
+            kw_item = table.item(row, 3)
+            if not kw_item:
+                continue
+            keyword = kw_item.text().strip()
+            if not keyword:
+                continue
+            cell0 = table.item(row, 0)
+            if not cell0:
+                continue
+            post_url = cell0.data(self.POST_URL_ROLE) or ''
+            if not post_url:
+                continue
+            item = cell0.data(self.ITEM_DATA_ROLE)
+            if item:
+                item['keyword'] = keyword
+            tasks.append((row, post_url, keyword))
+
+        if not tasks:
+            return
+
+        self.recheck_btn.setEnabled(False)
+        self.recheck_btn.setText('확인 중...')
+
+        self._recheck_worker = _ReCheckWorker(tasks, self._rank_limit)
+        self._recheck_worker.row_done.connect(
+            lambda row, rank, t=table: self._on_recheck_row_done(t, row, rank)
+        )
+        self._recheck_worker.all_done.connect(self._on_recheck_finished)
+        self._recheck_worker.start()
+
+    def _on_recheck_row_done(self, table: QTableWidget, row: int, rank: int):
+        cell0 = table.item(row, 0)
+        if cell0:
+            item = cell0.data(self.ITEM_DATA_ROLE)
+            if item:
+                item['rank'] = rank
+
+        rank_cell = table.item(row, 4)
+        if rank_cell:
+            table.blockSignals(True)
+            rank_text = f'{rank}위' if rank > 0 else '-'
+            rank_cell.setText(rank_text)
+            if rank > 0:
+                rank_cell.setForeground(QColor('#166534'))
+                rank_cell.setFont(QFont('', -1, QFont.Bold))
+            else:
+                rank_cell.setForeground(QColor('#B91C1C'))
+                rank_cell.setFont(QFont('', -1, QFont.Normal))
+            table.blockSignals(False)
+
+        self._update_summary()
+
+    def _on_recheck_finished(self):
+        self.recheck_btn.setText('순위 재확인')
+        idx = self.tab_widget.currentIndex()
+        if idx >= 0:
+            table = self.tab_widget.widget(idx)
+            if table:
+                selected = table.selectionModel().selectedRows()
+                self.recheck_btn.setEnabled(len(selected) > 0)
