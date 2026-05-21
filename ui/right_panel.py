@@ -524,14 +524,16 @@ class RightPanel(QWidget):
         return item
 
     def _on_cell_clicked(self, row: int, col: int, table: QTableWidget):
-        if col != self.COL_LINK:
+        if col == self.COL_LINK:
+            item = table.item(row, 0)
+            if item:
+                post_url = item.data(self.POST_URL_ROLE)
+                if post_url:
+                    QDesktopServices.openUrl(QUrl(post_url))
             return
-        item = table.item(row, 0)
-        if not item:
-            return
-        post_url = item.data(self.POST_URL_ROLE)
-        if post_url:
-            QDesktopServices.openUrl(QUrl(post_url))
+        is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
+        selected = table.selectionModel().selectedRows()
+        self.recheck_btn.setEnabled(len(selected) > 0 and not is_rechecking)
 
     def _close_tab_by_button(self, btn: QPushButton):
         bar = self.tab_widget.tabBar()
@@ -694,7 +696,13 @@ class RightPanel(QWidget):
         self._update_summary()
         has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
         self.download_btn.setEnabled(has_results)
-        self.recheck_btn.setEnabled(False)
+        table = self.tab_widget.widget(index) if 0 <= index < self.tab_widget.count() else None
+        is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
+        if table and not is_rechecking:
+            selected = table.selectionModel().selectedRows()
+            self.recheck_btn.setEnabled(len(selected) > 0)
+        else:
+            self.recheck_btn.setEnabled(False)
 
     def _update_summary(self):
         idx = self.tab_widget.currentIndex()
@@ -757,6 +765,7 @@ class RightPanel(QWidget):
         item = cell0.data(self.ITEM_DATA_ROLE)
         if item:
             item['keyword'] = changed_item.text().strip()
+        table.selectRow(row)
 
     def _on_recheck_clicked(self):
         idx = self.tab_widget.currentIndex()
