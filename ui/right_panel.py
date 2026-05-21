@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from PyQt5.QtCore import QEvent, QThread, QTimer, Qt, QUrl, pyqtSignal
+from PyQt5.QtCore import QEvent, QItemSelectionModel, QThread, QTimer, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (
@@ -767,8 +767,12 @@ class RightPanel(QWidget):
             item['keyword'] = changed_item.text().strip()
         table.blockSignals(True)
         changed_item.setForeground(QColor('#1D4F91'))
+        changed_item.setFont(QFont('', -1, QFont.Bold))
         table.blockSignals(False)
-        table.selectRow(row)
+        table.selectionModel().select(
+            table.model().index(row, 0),
+            QItemSelectionModel.Select | QItemSelectionModel.Rows,
+        )
 
     def _on_recheck_clicked(self):
         idx = self.tab_widget.currentIndex()
@@ -836,7 +840,12 @@ class RightPanel(QWidget):
             kw_cell = table.item(row, 4)
             if kw_cell:
                 kw_cell.setForeground(QColor('#111827'))
+                kw_cell.setFont(QFont('', -1, QFont.Normal))
             table.blockSignals(False)
+        table.selectionModel().select(
+            table.model().index(row, 0),
+            QItemSelectionModel.Deselect | QItemSelectionModel.Rows,
+        )
 
         self._update_summary()
 
