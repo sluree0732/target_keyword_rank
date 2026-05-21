@@ -78,6 +78,7 @@ class RightPanel(QWidget):
     POST_URL_ROLE = Qt.UserRole + 1
     BLOG_URL_ROLE = Qt.UserRole + 2
     ITEM_DATA_ROLE = Qt.UserRole + 3
+    MODIFIED_ROLE = Qt.UserRole + 4
 
     def __init__(self):
         super().__init__()
@@ -549,7 +550,8 @@ class RightPanel(QWidget):
             return
         is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
         selected = table.selectionModel().selectedRows()
-        self.recheck_btn.setEnabled(len(selected) > 0 and not is_rechecking)
+        has_modified = self._has_modified_rows(table)
+        self.recheck_btn.setEnabled((len(selected) > 0 or has_modified) and not is_rechecking)
 
     def _close_tab_by_button(self, btn: QPushButton):
         bar = self.tab_widget.tabBar()
@@ -671,7 +673,8 @@ class RightPanel(QWidget):
     def _on_row_selected(self, table: QTableWidget):
         selected_rows = table.selectionModel().selectedRows()
         is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
-        self.recheck_btn.setEnabled(len(selected_rows) > 0 and not is_rechecking)
+        has_modified = self._has_modified_rows(table)
+        self.recheck_btn.setEnabled((len(selected_rows) > 0 or has_modified) and not is_rechecking)
 
         row = table.currentRow()
         if row < 0 or not selected_rows:
@@ -716,7 +719,8 @@ class RightPanel(QWidget):
         is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
         if table and not is_rechecking:
             selected = table.selectionModel().selectedRows()
-            self.recheck_btn.setEnabled(len(selected) > 0)
+            has_modified = self._has_modified_rows(table)
+            self.recheck_btn.setEnabled(len(selected) > 0 or has_modified)
         else:
             self.recheck_btn.setEnabled(False)
 
@@ -784,11 +788,16 @@ class RightPanel(QWidget):
         table.blockSignals(True)
         changed_item.setForeground(QColor('#1D4F91'))
         changed_item.setFont(QFont('', -1, QFont.Bold))
+        changed_item.setData(self.MODIFIED_ROLE, True)
         table.blockSignals(False)
-        table.selectionModel().select(
-            table.model().index(row, 0),
-            QItemSelectionModel.Select | QItemSelectionModel.Rows,
-        )
+        self.recheck_btn.setEnabled(True)
+
+    def _has_modified_rows(self, table: QTableWidget) -> bool:
+        for row in range(table.rowCount()):
+            kw_cell = table.item(row, self.COL_KEYWORD)
+            if kw_cell and kw_cell.data(self.MODIFIED_ROLE):
+                return True
+        return False
 
     def _on_recheck_clicked(self):
         idx = self.tab_widget.currentIndex()
@@ -798,14 +807,19 @@ class RightPanel(QWidget):
         if not table:
             return
 
-        selected_rows = table.selectionModel().selectedRows()
-        if not selected_rows:
+        modified_rows = {
+            r for r in range(table.rowCount())
+            if (kc := table.item(r, self.COL_KEYWORD)) and kc.data(self.MODIFIED_ROLE)
+        }
+        selected_rows = {i.row() for i in table.selectionModel().selectedRows()}
+        all_rows = sorted(modified_rows | selected_rows)
+
+        if not all_rows:
             return
 
         tasks = []
-        for index in selected_rows:
-            row = index.row()
-            kw_item = table.item(row, 4)
+        for row in all_rows:
+            kw_item = table.item(row, self.COL_KEYWORD)
             if not kw_item:
                 continue
             keyword = kw_item.text().strip()
@@ -857,11 +871,8 @@ class RightPanel(QWidget):
             if kw_cell:
                 kw_cell.setForeground(QColor('#111827'))
                 kw_cell.setFont(QFont('', -1, QFont.Normal))
+                kw_cell.setData(self.MODIFIED_ROLE, False)
             table.blockSignals(False)
-        table.selectionModel().select(
-            table.model().index(row, 0),
-            QItemSelectionModel.Deselect | QItemSelectionModel.Rows,
-        )
 
         self._update_summary()
 
