@@ -765,6 +765,9 @@ class RightPanel(QWidget):
         item = cell0.data(self.ITEM_DATA_ROLE)
         if item:
             item['keyword'] = changed_item.text().strip()
+        table.blockSignals(True)
+        changed_item.setForeground(QColor('#1D4F91'))
+        table.blockSignals(False)
         table.selectRow(row)
 
     def _on_recheck_clicked(self):
@@ -830,6 +833,9 @@ class RightPanel(QWidget):
             else:
                 rank_cell.setForeground(QColor('#B91C1C'))
                 rank_cell.setFont(QFont('', -1, QFont.Normal))
+            kw_cell = table.item(row, 4)
+            if kw_cell:
+                kw_cell.setForeground(QColor('#111827'))
             table.blockSignals(False)
 
         self._update_summary()
