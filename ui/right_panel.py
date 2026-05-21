@@ -12,8 +12,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
+    QStyledItemDelegate,
     QTabBar,
     QTabWidget,
     QTableWidget,
@@ -23,6 +25,19 @@ from PyQt5.QtWidgets import (
 )
 
 from utils.excel_exporter import export_to_excel
+
+
+class _TitleReadOnlyDelegate(QStyledItemDelegate):
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+        editor.setReadOnly(True)
+        return editor
+
+    def setEditorData(self, editor, index):
+        editor.setText(index.data() or '')
+
+    def setModelData(self, editor, model, index):
+        pass  # 원본 데이터 변경 차단
 
 
 class _ReCheckWorker(QThread):
@@ -302,6 +317,7 @@ class RightPanel(QWidget):
         table.itemChanged.connect(
             lambda item, t=table: self._on_keyword_cell_changed(item, t)
         )
+        table.setItemDelegateForColumn(self.COL_TITLE, _TitleReadOnlyDelegate(table))
         QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
         return table
 
@@ -428,7 +444,7 @@ class RightPanel(QWidget):
             table.setItem(row, 0, self._make_item(_display_blog_id(blog_url), tooltip=blog_url))
             table.setItem(row, 1, self._make_item(visitor_text, Qt.AlignCenter))
             title_item = self._make_item(post_title)
-            title_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            title_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
             table.setItem(row, 2, title_item)
         else:
             for col in (0, 1, 2):
