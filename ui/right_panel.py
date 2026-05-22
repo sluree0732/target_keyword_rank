@@ -434,8 +434,6 @@ class RightPanel(QWidget):
             table.horizontalHeaderItem(5).setText('순위')
 
         self._insert_row(table, item)
-        if table.rowCount() == 1:
-            table.selectRow(0)
         self._update_summary()
         table.scrollToBottom()
         self.download_btn.setEnabled(True)
