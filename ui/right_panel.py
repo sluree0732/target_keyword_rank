@@ -726,6 +726,8 @@ class RightPanel(QWidget):
         has_results = 0 <= index < len(self._tab_results) and bool(self._tab_results[index])
         self.download_btn.setEnabled(has_results)
         table = self.tab_widget.widget(index) if 0 <= index < self.tab_widget.count() else None
+        if table:
+            table.scrollToTop()
         is_rechecking = self._recheck_worker is not None and self._recheck_worker.isRunning()
         if table and not is_rechecking:
             selected = table.selectionModel().selectedRows()
