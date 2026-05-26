@@ -50,18 +50,10 @@ class AnalyzerThread(QThread):
         self._cancelled = True
 
     def _call_gemini_with_retry(self, titles: list, api_key: str) -> dict:
-        examples = None
-        try:
-            from utils.keyword_corrections_store import fetch_by_grade
-            fetched = fetch_by_grade(self.keyword_grade, limit=5)
-            examples = fetched if fetched else None
-        except Exception:
-            pass
-
         for attempt, delay in enumerate(_RETRY_DELAYS, 1):
             try:
                 return extract_keywords_batch(
-                    titles, self.keyword_grade, self.keyword_count, api_key, examples
+                    titles, self.keyword_grade, self.keyword_count, api_key
                 )
             except Exception as e:
                 err_str = str(e)
@@ -124,15 +116,28 @@ class AnalyzerThread(QThread):
                 continue
 
             titles = [p['title'] for p in posts]
-            self.status_updated.emit(
-                f'키워드 추출 중... [{blog_id}] ({len(titles)}개 게시글 배치 처리)'
-            )
 
+            # DB에 저장된 정답 키워드 먼저 조회
+            db_matches = {}
             try:
-                keyword_map = self._call_gemini_with_retry(titles, api_key)
-            except Exception as e:
-                self.error_occurred.emit(f'{blog_id} 키워드 추출 실패: {e}')
-                continue
+                from utils.keyword_corrections_store import fetch_exact_matches
+                db_matches = fetch_exact_matches(titles, self.keyword_grade)
+            except Exception:
+                pass
+
+            unmatched_titles = [t for t in titles if t not in db_matches]
+            keyword_map = {title: [kw] for title, kw in db_matches.items()}
+
+            if unmatched_titles:
+                self.status_updated.emit(
+                    f'키워드 추출 중... [{blog_id}] ({len(unmatched_titles)}개 Gemini 배치 처리)'
+                )
+                try:
+                    gemini_map = self._call_gemini_with_retry(unmatched_titles, api_key)
+                    keyword_map.update(gemini_map)
+                except Exception as e:
+                    self.error_occurred.emit(f'{blog_id} 키워드 추출 실패: {e}')
+                    continue
 
             if self._cancelled:
                 break

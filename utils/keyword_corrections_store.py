@@ -18,17 +18,30 @@ def save(post_title: str, grade: int, keyword: str) -> None:
     ).raise_for_status()
 
 
-def fetch_by_grade(grade: int, limit: int = 5) -> list:
+def fetch_exact_matches(titles: list, grade: int) -> dict:
+    """같은 등급의 저장된 정답 키워드를 반환. {post_title: keyword}"""
+    if not titles:
+        return {}
+
+    escaped = [t.replace('"', '""') for t in titles]
+    in_value = 'in.(' + ','.join(f'"{t}"' for t in escaped) + ')'
+
     resp = requests.get(
         _URL,
         headers=_HEADERS,
         params={
             'grade': f'eq.{grade}',
-            'select': 'post_title,keyword',
-            'order': 'created_at.desc',
-            'limit': limit,
+            'post_title': in_value,
+            'select': 'post_title,keyword,id',
+            'order': 'id.desc',
         },
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json()
+
+    result = {}
+    for row in resp.json():
+        title = row['post_title']
+        if title not in result:  # id.desc 순이므로 첫 번째가 최신
+            result[title] = row['keyword']
+    return result
