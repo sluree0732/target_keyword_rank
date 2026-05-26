@@ -803,6 +803,8 @@ class RightPanel(QWidget):
         changed_item.setData(self.MODIFIED_ROLE, True)
         table.blockSignals(False)
         self.recheck_btn.setEnabled(True)
+        if table.currentRow() == row:
+            self._detail_keyword.setText(changed_item.text().strip())
 
     def _has_modified_rows(self, table: QTableWidget) -> bool:
         for row in range(table.rowCount()):
