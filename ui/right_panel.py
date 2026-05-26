@@ -29,6 +29,8 @@ from utils.excel_exporter import export_to_excel
 
 
 class _KeywordDelegate(QStyledItemDelegate):
+    row_committed = pyqtSignal(int)
+
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         if index.data(Qt.UserRole + 4):  # MODIFIED_ROLE
@@ -36,6 +38,10 @@ class _KeywordDelegate(QStyledItemDelegate):
                 option.palette.setColor(QPalette.HighlightedText, QColor('#1D4F91'))
             else:
                 option.backgroundBrush = QBrush(QColor('#FEF9C3'))
+
+    def setModelData(self, editor, model, index):
+        super().setModelData(editor, model, index)
+        self.row_committed.emit(index.row())
 
 
 class _TitleReadOnlyDelegate(QStyledItemDelegate):
@@ -330,7 +336,11 @@ class RightPanel(QWidget):
             lambda item, t=table: self._on_keyword_cell_changed(item, t)
         )
         table.setItemDelegateForColumn(self.COL_TITLE, _TitleReadOnlyDelegate(table))
-        table.setItemDelegateForColumn(self.COL_KEYWORD, _KeywordDelegate(table))
+        kw_delegate = _KeywordDelegate(table)
+        kw_delegate.row_committed.connect(
+            lambda row, t=table: self._on_keyword_row_committed(row, t)
+        )
+        table.setItemDelegateForColumn(self.COL_KEYWORD, kw_delegate)
         QTimer.singleShot(0, lambda t=table: self._apply_default_column_widths(t))
         return table
 
@@ -805,6 +815,19 @@ class RightPanel(QWidget):
         self.recheck_btn.setEnabled(True)
         if table.currentRow() == row:
             self._detail_keyword.setText(changed_item.text().strip())
+
+    def _on_keyword_row_committed(self, row: int, table: QTableWidget):
+        """Fires when keyword editor commits — handles the case where pasted text is
+        identical to existing text so itemChanged never fires and MODIFIED_ROLE is never set."""
+        kw_item = table.item(row, self.COL_KEYWORD)
+        if not kw_item or not (kw_item.flags() & Qt.ItemIsEditable):
+            return
+        table.blockSignals(True)
+        kw_item.setData(self.MODIFIED_ROLE, True)
+        kw_item.setForeground(QColor('#1D4F91'))
+        kw_item.setFont(QFont('', -1, QFont.Bold))
+        table.blockSignals(False)
+        self.recheck_btn.setEnabled(True)
 
     def _has_modified_rows(self, table: QTableWidget) -> bool:
         for row in range(table.rowCount()):
