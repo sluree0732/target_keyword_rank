@@ -103,6 +103,7 @@ class RightPanel(QWidget):
         self._close_btns: list = []
         self._rank_limit: int = 30
         self._recheck_worker: _ReCheckWorker | None = None
+        self._pending_corrections: list = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -876,6 +877,29 @@ class RightPanel(QWidget):
         if not tasks:
             return
 
+        # 수정된 행만 캡처 — 재확인 완료 후 Supabase에 저장
+        self._pending_corrections = []
+        try:
+            tab_label = self.tab_widget.tabText(idx)
+            ui_grade = int(tab_label.replace('키워드 등급', '').strip())
+            internal_grade = 6 - ui_grade
+            for row in modified_rows:
+                kw_item = table.item(row, self.COL_KEYWORD)
+                cell0 = table.item(row, 0)
+                if not kw_item or not cell0:
+                    continue
+                item_data = cell0.data(self.ITEM_DATA_ROLE)
+                post_title = item_data.get('post_title', '') if item_data else ''
+                keyword = kw_item.text().strip()
+                if post_title and keyword:
+                    self._pending_corrections.append({
+                        'post_title': post_title,
+                        'grade': internal_grade,
+                        'keyword': keyword,
+                    })
+        except (ValueError, AttributeError):
+            self._pending_corrections = []
+
         self.recheck_btn.setEnabled(False)
         self.recheck_btn.setText('확인 중...')
 
@@ -915,6 +939,16 @@ class RightPanel(QWidget):
 
     def _on_recheck_finished(self):
         self.recheck_btn.setText('순위 재확인')
+
+        if self._pending_corrections:
+            from utils.keyword_corrections_store import save as save_correction
+            for c in self._pending_corrections:
+                try:
+                    save_correction(c['post_title'], c['grade'], c['keyword'])
+                except Exception:
+                    pass
+            self._pending_corrections = []
+
         idx = self.tab_widget.currentIndex()
         if idx >= 0:
             table = self.tab_widget.widget(idx)

@@ -50,10 +50,18 @@ class AnalyzerThread(QThread):
         self._cancelled = True
 
     def _call_gemini_with_retry(self, titles: list, api_key: str) -> dict:
+        examples = None
+        try:
+            from utils.keyword_corrections_store import fetch_by_grade
+            fetched = fetch_by_grade(self.keyword_grade, limit=5)
+            examples = fetched if fetched else None
+        except Exception:
+            pass
+
         for attempt, delay in enumerate(_RETRY_DELAYS, 1):
             try:
                 return extract_keywords_batch(
-                    titles, self.keyword_grade, self.keyword_count, api_key
+                    titles, self.keyword_grade, self.keyword_count, api_key, examples
                 )
             except Exception as e:
                 err_str = str(e)

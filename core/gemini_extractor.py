@@ -30,6 +30,7 @@ def extract_keywords_batch(
     grade: int,
     count: int,
     api_key: str,
+    examples: list | None = None,
 ) -> dict:
     import google.generativeai as genai
 
@@ -40,7 +41,7 @@ def extract_keywords_batch(
     temperature = temperature_by_grade.get(grade, 0.2)
 
     response = model.generate_content(
-        _build_prompt(titles, grade, count),
+        _build_prompt(titles, grade, count, examples),
         generation_config={
             'response_mime_type': 'application/json',
             'response_schema': _KEYWORD_RESPONSE_SCHEMA,
@@ -53,7 +54,7 @@ def extract_keywords_batch(
     return _normalize_keyword_results(data, titles, count)
 
 
-def _build_prompt(titles: list, grade: int, count: int) -> str:
+def _build_prompt(titles: list, grade: int, count: int, examples: list | None = None) -> str:
     titles_text = '\n'.join(f'{i + 1}. {title}' for i, title in enumerate(titles))
 
     grade_spec = {
@@ -108,6 +109,13 @@ def _build_prompt(titles: list, grade: int, count: int) -> str:
         ),
     }[grade]
 
+    examples_section = ''
+    if examples:
+        lines = '\n'.join(
+            f'  - "{e["post_title"]}" → "{e["keyword"]}"' for e in examples
+        )
+        examples_section = f'[참고 - 등급 {grade} 정답 사례]\n{lines}\n\n'
+
     return (
         f'아래 {len(titles)}개의 네이버 블로그 게시글 제목에서 각각 '
         f'네이버 블로그 검색 순위 확인용 키워드를 {count}개 이하로 추출해.\n\n'
@@ -126,6 +134,7 @@ def _build_prompt(titles: list, grade: int, count: int) -> str:
         f'- 단어 순서: 장소/대상 → 특징/수식어 → 서비스/제품 카테고리.\n'
         f'- 대화체·일기형 제목으로 검색 가능한 명사·카테고리·장소가 전혀 없으면 keywords를 빈 배열 []로 반환해.\n'
         f'- 결과는 입력 번호와 같은 index를 반드시 포함해.\n\n'
+        f'{examples_section}'
         f'제목 목록:\n{titles_text}\n\n'
         f'JSON만 출력해. 예시:\n'
         f'{{"results":[{{"index":1,"title":"원본 제목","keywords":["키워드A","키워드B"]}}]}}'
