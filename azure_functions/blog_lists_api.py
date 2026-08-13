@@ -37,12 +37,12 @@ def blog_lists_save(req: func.HttpRequest) -> func.HttpResponse:
             if existing:
                 cur.execute(
                     'UPDATE blog_lists SET ids = %s WHERE name = %s',
-                    (json.dumps(ids), name),
+                    (ids, name),  # ids 컬럼은 text[] 배열 — psycopg2가 Python list를 자동 변환
                 )
             else:
                 cur.execute(
                     'INSERT INTO blog_lists (name, ids) VALUES (%s, %s)',
-                    (name, json.dumps(ids)),
+                    (name, ids),
                 )
             conn.commit()
         return func.HttpResponse(status_code=204)

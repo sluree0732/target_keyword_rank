@@ -45,14 +45,15 @@ func azure functionapp publish <function-app-이름>
 CREATE TABLE blog_lists (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    ids JSONB NOT NULL
+    ids TEXT[] NOT NULL
 );
 
 CREATE TABLE keyword_corrections (
     id SERIAL PRIMARY KEY,
     post_title TEXT NOT NULL,
     grade INTEGER NOT NULL,
-    keyword TEXT NOT NULL
+    keyword TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 ```
 
