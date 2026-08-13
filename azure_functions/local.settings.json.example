@@ -1,0 +1,8 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "PG_CONN": "postgresql://tkradmin:<azure_password>@<server-name>.postgres.database.azure.com:5432/tkr_db"
+  }
+}
