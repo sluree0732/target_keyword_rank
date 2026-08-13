@@ -1,9 +1,11 @@
 import requests
 
 from utils.config_loader import load_config
+from utils.dual_write import try_secondary
 
 _config = load_config()
 _BACKEND = _config.get('backend', 'supabase')
+_DUAL_WRITE = _config.get('dual_write', False)
 
 _URL = 'https://mitfasiqmftonblgreua.supabase.co/rest/v1/keyword_corrections'
 _KEY = 'sb_publishable_LGiL6rFjGBrT9HQ_Tcn1nQ_Jo5MCsyn'
@@ -23,17 +25,28 @@ _AZURE_HEADERS = {
 
 def save(post_title: str, grade: int, keyword: str) -> None:
     if _BACKEND == 'azure':
-        requests.post(
-            f'{_AZURE_BASE}/keyword_corrections',
-            headers=_AZURE_HEADERS,
-            json={'post_title': post_title, 'grade': grade, 'keyword': keyword},
-            timeout=10,
-        ).raise_for_status()
-        return
+        _save_azure(post_title, grade, keyword)
+        if _DUAL_WRITE:
+            try_secondary(_save_supabase, post_title, grade, keyword)
+    else:
+        _save_supabase(post_title, grade, keyword)
+        if _DUAL_WRITE:
+            try_secondary(_save_azure, post_title, grade, keyword)
 
+
+def _save_supabase(post_title: str, grade: int, keyword: str) -> None:
     requests.post(
         _URL,
         headers={**_HEADERS, 'Prefer': 'return=minimal'},
+        json={'post_title': post_title, 'grade': grade, 'keyword': keyword},
+        timeout=10,
+    ).raise_for_status()
+
+
+def _save_azure(post_title: str, grade: int, keyword: str) -> None:
+    requests.post(
+        f'{_AZURE_BASE}/keyword_corrections',
+        headers=_AZURE_HEADERS,
         json={'post_title': post_title, 'grade': grade, 'keyword': keyword},
         timeout=10,
     ).raise_for_status()
@@ -45,15 +58,11 @@ def fetch_exact_matches(titles: list, grade: int) -> dict:
         return {}
 
     if _BACKEND == 'azure':
-        resp = requests.post(
-            f'{_AZURE_BASE}/keyword_corrections/fetch',
-            headers=_AZURE_HEADERS,
-            json={'titles': titles, 'grade': grade},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return _fetch_azure(titles, grade)
+    return _fetch_supabase(titles, grade)
 
+
+def _fetch_supabase(titles: list, grade: int) -> dict:
     escaped = [t.replace('"', '""') for t in titles]
     in_value = 'in.(' + ','.join(f'"{t}"' for t in escaped) + ')'
 
@@ -76,3 +85,14 @@ def fetch_exact_matches(titles: list, grade: int) -> dict:
         if title not in result:  # id.desc 순이므로 첫 번째가 최신
             result[title] = row['keyword']
     return result
+
+
+def _fetch_azure(titles: list, grade: int) -> dict:
+    resp = requests.post(
+        f'{_AZURE_BASE}/keyword_corrections/fetch',
+        headers=_AZURE_HEADERS,
+        json={'titles': titles, 'grade': grade},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
